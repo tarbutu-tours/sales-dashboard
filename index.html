@@ -37,12 +37,7 @@ const ct={fontSize:11,color:T.muted,fontWeight:600,marginBottom:10,textTransform
 
 const fmt=v=>{if(!v||isNaN(v))return"₪0";v=Number(v);if(v>=1000000)return"₪"+(v/1000000).toFixed(1)+"M";if(v>=1000)return"₪"+Math.round(v/1000)+"K";return"₪"+Math.round(v).toLocaleString("he-IL")};
 const ago=n=>{const d=new Date();d.setDate(d.getDate()-n);return d.toISOString().split("T")[0]};
-const getDateRange=n=>{
-  const today=new Date().toISOString().split("T")[0];
-  if(n===0) return {from:today,to:today,label:"היום"};
-  if(n===1){const y=ago(1);return {from:y,to:y,label:"אתמול"};}
-  return {from:ago(n),to:today,label:n+" ימים"};
-};
+
 const PD_SINCE = "2025-04-01"; // נתוני Pipedrive מאפריל 2025
 const AC_SINCE = ago(90);      // שיחות Aircall 3 חודשים אחרונים
 const dIn=d=>{if(!d.stage_change_time)return 0;return Math.floor((Date.now()-new Date(d.stage_change_time))/86400000)};
@@ -341,7 +336,7 @@ function App() {
       pdGet("/users").catch(()=>[]),
       pdGet("/stages").catch(()=>[]),
       (setLoadStatus("שולף מלאי..."),pdGet("/products").catch(()=>[])),
-      (setLoadStatus("שולף שיחות..."),acGet("/calls?order=DESC&per_page=50&from="+Math.floor(new Date(ago(90)).getTime()/1000)).catch(ex=>{e.push("Aircall: "+ex.message);return null}))
+      (setLoadStatus("שולף שיחות..."),acGet("/calls?order=DESC&per_page=50&from="+Math.floor(new Date(fromDate).getTime()/1000)).catch(ex=>{e.push("Aircall: "+ex.message);return null}))
     ]);
 
     const open=deals.filter(x=>x.status==="open");
@@ -431,14 +426,14 @@ function App() {
           {tab==="main"&&<div className="fade">
             <SecDiv>Pipedrive</SecDiv>
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
-              <Kpi label="👥 לידים חדשים" value={newP.length} delta={dateRange.label}/>
+              <Kpi label="👥 לידים חדשים" value={newP.length} delta={rangeLabel}/>
               <Kpi label="📋 עסקאות פתוחות" value={open.length} delta="ב-pipeline"/>
-              <Kpi label="✅ נסגרו" value={recW.length} delta={dateRange.label} dc={T.teal}/>
+              <Kpi label="✅ נסגרו" value={recW.length} delta={rangeLabel} dc={T.teal}/>
               <Kpi label="💰 ערך pipeline" value={fmt(pVal)} color={T.gold} dc={T.gold}/>
             </div>
             <SecDiv color={T.gold}>Aircall – שיחות</SecDiv>
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
-              <Kpi label="📞 סה״כ שיחות" value={acOK?calls.length:"–"} delta={dateRange.label}/>
+              <Kpi label="📞 סה״כ שיחות" value={acOK?calls.length:"–"} delta={rangeLabel}/>
               <Kpi label="📲 נכנסות" value={acOK?ib.length:"–"} dc={T.teal}/>
               <Kpi label="📤 יוצאות" value={acOK?ob.length:"–"} color={T.gold}/>
               <Kpi label="🔕 לא נענו" value={acOK?ms.length:"–"} delta={"מענה "+rate+"%"} color={T.red} dc={T.red}/>
