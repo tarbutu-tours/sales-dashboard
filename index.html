@@ -43,21 +43,14 @@ const dIn=d=>{if(!d.stage_change_time)return 0;return Math.floor((Date.now()-new
 const mmss=s=>Math.floor(s/60)+":"+String(s%60).padStart(2,"0");
 
 // ── פונקציות API עם מספר proxies כגיבוי ──────────────────────────────────
-const PROXIES = [
-  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-  url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-  url => `https://thingproxy.freeboard.io/fetch/${url}`,
-];
+// ← כתובת ה-Worker שלך מ-Cloudflare (תעדכן אחרי ההגדרה)
+const WORKER_URL = "https://floral-bonus-cfa3.yanivd.workers.dev";
 
 async function fetchWithProxy(url, opts={}) {
-  for (const makeProxy of PROXIES) {
-    try {
-      const proxyUrl = makeProxy(url);
-      const r = await fetch(proxyUrl, {...opts, signal: AbortSignal.timeout(10000)});
-      if (r.ok) return r;
-    } catch(e) { continue; }
-  }
-  throw new Error("כל ה-proxies נכשלו");
+  const proxyUrl = WORKER_URL + "?url=" + encodeURIComponent(url);
+  const r = await fetch(proxyUrl, {...opts, signal: AbortSignal.timeout(15000)});
+  if (!r.ok) throw new Error("Worker error: " + r.status);
+  return r;
 }
 
 async function pdGet(ep, start=0, acc=[]) {
