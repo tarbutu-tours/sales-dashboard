@@ -337,7 +337,7 @@ function App() {
 
     const open = deals.filter(x => x.status === "open");
     const won  = deals.filter(x => x.status === "won");
-    const newP = persons.filter(p => p.add_time && p.add_time.substring(0,10) >= range.from && p.add_time.substring(0,10) <= range.to);
+    const newP = deals.filter(d => d.add_time && d.add_time.substring(0,10) >= range.from && d.add_time.substring(0,10) <= range.to);
     const recW = won.filter(x => x.won_time && x.won_time.substring(0,10) >= range.from && x.won_time.substring(0,10) <= range.to);
     const pVal = open.reduce((s,x) => s + (Number(x.value)||0), 0);
 
@@ -425,7 +425,7 @@ function App() {
           {tab === "main" && <>
             <SecDiv>Pipedrive</SecDiv>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:10 }}>
-              <Kpi label="👥 לידים חדשים" value={newP.length} delta={range.label}/>
+              <Kpi label="📋 עסקאות חדשות" value={newP.length} delta={range.label}/>
               <Kpi label="📋 עסקאות פתוחות" value={open.length} delta="ב-pipeline"/>
               <Kpi label="✅ נסגרו" value={recW.length} delta={range.label} dc={T.teal}/>
               <Kpi label="💰 ערך pipeline" value={fmt(pVal)} color={T.gold} dc={T.gold}/>
