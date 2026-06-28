@@ -325,8 +325,11 @@ function App() {
 
   const load=useCallback(async()=>{
     setLoading(true);setErrs([]);setLoadStatus("שולף עסקאות...");
-    const since=ago(days);
-    const sinceTs=Math.floor(new Date(since).getTime()/1000);
+    const today=new Date().toISOString().split("T")[0];
+    const fromDate=days===0?today:days===1?ago(1):ago(days);
+    const toDate=days===1?ago(1):today;
+    const rangeLabel=days===0?"היום":days===1?"אתמול":days+" ימים";
+    const sinceTs=Math.floor(new Date(fromDate).getTime()/1000);
     const e=[];
 
     const [deals,persons,acts,users,stages,products,callsRaw]=await Promise.all([
@@ -336,14 +339,13 @@ function App() {
       pdGet("/users").catch(()=>[]),
       pdGet("/stages").catch(()=>[]),
       (setLoadStatus("שולף מלאי..."),pdGet("/products").catch(()=>[])),
-      (setLoadStatus("שולף שיחות..."),acGet("/calls?order=DESC&per_page=50&from="+Math.floor(new Date(fromDate).getTime()/1000)).catch(ex=>{e.push("Aircall: "+ex.message);return null}))
+      (setLoadStatus("שולף שיחות..."),acGet("/calls?order=DESC&per_page=50&from="+sinceTs).catch(ex=>{e.push("Aircall: "+ex.message);return null}))
     ]);
 
     const open=deals.filter(x=>x.status==="open");
     const won=deals.filter(x=>x.status==="won");
-    const PD_SINCE='2025-04-01'; // נתונים מאפריל 2025
-    const newP=persons.filter(p=>p.add_time&&p.add_time.substring(0,10)>=PD_SINCE);
-    const recW=won.filter(x=>x.won_time&&x.won_time.substring(0,10)>=PD_SINCE);
+    const newP=persons.filter(p=>p.add_time&&p.add_time.substring(0,10)>=fromDate&&p.add_time.substring(0,10)<=toDate);
+    const recW=won.filter(x=>x.won_time&&x.won_time.substring(0,10)>=fromDate&&x.won_time.substring(0,10)<=toDate);
     const pVal=open.reduce((s,x)=>s+(Number(x.value)||0),0);
     const sm={};stages.forEach(s=>sm[s.id]=s.name);
     const um={};users.forEach(u=>um[u.id]=u.name);
