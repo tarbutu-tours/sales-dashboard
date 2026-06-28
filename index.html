@@ -37,6 +37,12 @@ const ct={fontSize:11,color:T.muted,fontWeight:600,marginBottom:10,textTransform
 
 const fmt=v=>{if(!v||isNaN(v))return"₪0";v=Number(v);if(v>=1000000)return"₪"+(v/1000000).toFixed(1)+"M";if(v>=1000)return"₪"+Math.round(v/1000)+"K";return"₪"+Math.round(v).toLocaleString("he-IL")};
 const ago=n=>{const d=new Date();d.setDate(d.getDate()-n);return d.toISOString().split("T")[0]};
+const getDateRange=n=>{
+  const today=new Date().toISOString().split("T")[0];
+  if(n===0) return {from:today,to:today,label:"היום"};
+  if(n===1){const y=ago(1);return {from:y,to:y,label:"אתמול"};}
+  return {from:ago(n),to:today,label:n+" ימים"};
+};
 const PD_SINCE = "2025-04-01"; // נתוני Pipedrive מאפריל 2025
 const AC_SINCE = ago(90);      // שיחות Aircall 3 חודשים אחרונים
 const dIn=d=>{if(!d.stage_change_time)return 0;return Math.floor((Date.now()-new Date(d.stage_change_time))/86400000)};
@@ -329,7 +335,7 @@ function App() {
     const e=[];
 
     const [deals,persons,acts,users,stages,products,callsRaw]=await Promise.all([
-      pdGet("/deals?status=all&start_date=2025-04-01").catch(ex=>{e.push("Pipedrive עסקאות: "+ex.message);return[]}),
+      pdGet("/deals?status=all").catch(ex=>{e.push("Pipedrive עסקאות: "+ex.message);return[]}),
       (setLoadStatus("שולף לידים..."),pdGet("/persons").catch(()=>[])),
       pdGet("/activities?done=0").catch(()=>[]),
       pdGet("/users").catch(()=>[]),
@@ -340,7 +346,7 @@ function App() {
 
     const open=deals.filter(x=>x.status==="open");
     const won=deals.filter(x=>x.status==="won");
-    const PD_SINCE='2025-04-01';
+    const PD_SINCE='2025-04-01'; // נתונים מאפריל 2025
     const newP=persons.filter(p=>p.add_time&&p.add_time.substring(0,10)>=PD_SINCE);
     const recW=won.filter(x=>x.won_time&&x.won_time.substring(0,10)>=PD_SINCE);
     const pVal=open.reduce((s,x)=>s+(Number(x.value)||0),0);
@@ -380,7 +386,7 @@ function App() {
       <div style={{display:"flex",gap:6,alignItems:"center"}}>
         <select value={days} onChange={e=>setDays(Number(e.target.value))}
           style={{background:T.navyCard,border:"1px solid "+T.border,color:"#F0F4F8",fontSize:12,padding:"5px 10px",borderRadius:6,cursor:"pointer"}}>
-          <option value={7}>7 ימים</option><option value={30}>30 ימים</option><option value={90}>רבעון</option>
+          <option value={0}>היום</option><option value={1}>אתמול</option><option value={7}>7 ימים</option><option value={30}>30 ימים</option><option value={90}>רבעון</option>
         </select>
         <button onClick={load} disabled={loading}
           style={{background:"transparent",border:"1px solid "+T.border,color:T.muted,fontSize:12,padding:"5px 12px",borderRadius:6,cursor:"pointer"}}>
@@ -425,14 +431,14 @@ function App() {
           {tab==="main"&&<div className="fade">
             <SecDiv>Pipedrive</SecDiv>
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
-              <Kpi label="👥 לידים חדשים" value={newP.length} delta={days+" ימים"}/>
+              <Kpi label="👥 לידים חדשים" value={newP.length} delta={dateRange.label}/>
               <Kpi label="📋 עסקאות פתוחות" value={open.length} delta="ב-pipeline"/>
-              <Kpi label="✅ נסגרו" value={recW.length} delta={days+" ימים"} dc={T.teal}/>
+              <Kpi label="✅ נסגרו" value={recW.length} delta={dateRange.label} dc={T.teal}/>
               <Kpi label="💰 ערך pipeline" value={fmt(pVal)} color={T.gold} dc={T.gold}/>
             </div>
             <SecDiv color={T.gold}>Aircall – שיחות</SecDiv>
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
-              <Kpi label="📞 סה״כ שיחות" value={acOK?calls.length:"–"} delta={days+" ימים"}/>
+              <Kpi label="📞 סה״כ שיחות" value={acOK?calls.length:"–"} delta={dateRange.label}/>
               <Kpi label="📲 נכנסות" value={acOK?ib.length:"–"} dc={T.teal}/>
               <Kpi label="📤 יוצאות" value={acOK?ob.length:"–"} color={T.gold}/>
               <Kpi label="🔕 לא נענו" value={acOK?ms.length:"–"} delta={"מענה "+rate+"%"} color={T.red} dc={T.red}/>
