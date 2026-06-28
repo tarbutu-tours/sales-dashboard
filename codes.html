@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ניהול קודי טיולים</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Segoe UI',Arial,sans-serif;background:#0B1F3A;color:#F0F4F8;direction:rtl;min-height:100vh;padding:1.5rem}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem}
+h1{font-size:18px;font-weight:600;color:#1DB8A0}
+.sub{font-size:12px;color:#7A9BBF;margin-top:3px}
+.back-btn{font-size:12px;padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:transparent;color:#7A9BBF;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:5px}
+.back-btn:hover{border-color:#1DB8A0;color:#1DB8A0}
+.card{background:#1A3257;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:1.1rem 1.25rem;margin-bottom:12px}
+.add-row{display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap}
+input,select{background:#132847;border:1px solid rgba(255,255,255,.1);color:#F0F4F8;font-size:13px;padding:8px 12px;border-radius:8px;font-family:inherit;direction:rtl}
+input:focus,select:focus{outline:none;border-color:#1DB8A0}
+.btn{padding:8px 16px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
+.btn-add{background:#1DB8A0;color:#fff}.btn-add:hover{background:#16967f}
+.btn-del{background:rgba(232,72,85,.12);color:#F0827A;border:1px solid rgba(232,72,85,.2);padding:4px 10px;font-size:11px}.btn-del:hover{background:rgba(232,72,85,.22)}
+.btn-save{background:#1A9AE0;color:#fff;width:100%;padding:11px;margin-top:10px}.btn-save:hover{background:#1480C0}
+.btn-export{background:rgba(29,184,160,.1);color:#1DB8A0;border:1px solid rgba(29,184,160,.2);width:100%;padding:9px;margin-top:6px}
+.search-row{display:flex;gap:8px;margin-bottom:8px}
+.search-row input{flex:1}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{color:#7A9BBF;font-weight:500;text-align:right;padding:6px 10px 8px;border-bottom:1px solid rgba(255,255,255,.07);font-size:10px;text-transform:uppercase;letter-spacing:.04em}
+td{padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.05)}
+tr:hover td{background:rgba(255,255,255,.02)}
+.code-badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:6px;background:rgba(29,184,160,.1);color:#1DB8A0;font-family:monospace;font-weight:600}
+.t-cruise{background:rgba(26,154,224,.15);color:#5BB8F0;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:500}
+.t-river{background:rgba(123,104,238,.15);color:#A89AFF;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:500}
+.t-other{background:rgba(240,180,41,.15);color:#F0B429;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:500}
+.count{font-size:11px;color:#7A9BBF;margin-bottom:8px}
+.saved-msg{font-size:12px;color:#1DB8A0;text-align:center;margin-top:6px;min-height:18px}
+.name-input{background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.1);color:#F0F4F8;font-size:13px;width:100%;padding:2px 4px;direction:rtl;font-family:inherit}
+.name-input:focus{outline:none;border-bottom-color:#1DB8A0}
+.type-sel{background:transparent;border:none;color:#7A9BBF;font-size:12px;cursor:pointer;direction:rtl;font-family:inherit}
+.empty{text-align:center;color:#7A9BBF;font-size:13px;padding:2rem}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <h1>📋 ניהול קודי טיולים</h1>
+    <div class="sub">כל קוד שמוסיפים כאן יופיע עם שמו המלא בדשבורד המכירות</div>
+  </div>
+  <a href="index.html" class="back-btn">← חזור לדשבורד</a>
+</div>
+
+<div class="card">
+  <div style="font-size:11px;color:#7A9BBF;margin-bottom:.5rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em">הוסף קוד חדש</div>
+  <div class="add-row">
+    <input id="newCode" type="text" placeholder="קוד (למשל TCFJ)" style="width:130px;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"/>
+    <input id="newName" type="text" placeholder="שם מלא של הטיול" style="flex:1;min-width:180px"/>
+    <select id="newType" style="width:140px">
+      <option value="cruise">🚢 קרוז ים</option>
+      <option value="river">🚤 שייטת נהרות</option>
+      <option value="other">✈️ אחר</option>
+    </select>
+    <button class="btn btn-add" onclick="addCode()">+ הוסף</button>
+  </div>
+
+  <div class="search-row">
+    <input id="searchBox" type="text" placeholder="🔍 חפש קוד או שם..." oninput="renderTable()"/>
+    <select id="filterType" onchange="renderTable()" style="width:140px">
+      <option value="all">כל הסוגים</option>
+      <option value="cruise">קרוז ים</option>
+      <option value="river">שייטת נהרות</option>
+      <option value="other">אחר</option>
+    </select>
+  </div>
+
+  <div class="count" id="countLabel"></div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:100px">קוד</th>
+        <th>שם הטיול</th>
+        <th style="width:130px">סוג</th>
+        <th style="width:60px"></th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+  <div class="empty" id="emptyMsg" style="display:none">אין קודים – הוסף את הראשון למעלה</div>
+
+  <button class="btn btn-save" onclick="saveAll()">💾 שמור שינויים</button>
+  <button class="btn btn-export" onclick="exportJSON()">📤 ייצא JSON</button>
+  <div class="saved-msg" id="savedMsg"></div>
+</div>
+
+<div style="font-size:11px;color:#7A9BBF;text-align:center;margin-top:8px;line-height:1.8">
+  💡 הנתונים נשמרים בדפדפן ומסונכרנים אוטומטית עם הדשבורד.<br/>
+  אם אתה פותח את הדשבורד מכשיר אחר – ייצא JSON והעלה ל-GitHub.
+</div>
+
+<script>
+const DEFAULT_CODES = [
+  {code:"TCFJ",name:"",type:"cruise"},
+  {code:"TCFI",name:"",type:"cruise"},
+  {code:"TCBA",name:"",type:"cruise"},
+  {code:"TCMW",name:"",type:"cruise"},
+  {code:"TCBI",name:"",type:"cruise"},
+  {code:"TCFH",name:"",type:"cruise"},
+  {code:"TCBR",name:"",type:"cruise"},
+  {code:"TRDU",name:"",type:"river"},
+  {code:"TRRS",name:"",type:"river"},
+];
+
+let codes=[];
+
+function load(){
+  const s=localStorage.getItem("cruise_codes");
+  codes=s?JSON.parse(s):DEFAULT_CODES.map(c=>({...c}));
+  renderTable();
+}
+
+function save(){localStorage.setItem("cruise_codes",JSON.stringify(codes));}
+
+function renderTable(){
+  const q=document.getElementById("searchBox").value.toLowerCase();
+  const ft=document.getElementById("filterType").value;
+  const filtered=codes.filter(c=>{
+    const ms=!q||c.code.toLowerCase().includes(q)||c.name.toLowerCase().includes(q);
+    const mf=ft==="all"||c.type===ft;
+    return ms&&mf;
+  });
+  document.getElementById("countLabel").textContent=`${filtered.length} מתוך ${codes.length} קודים`;
+  const tbody=document.getElementById("tableBody");
+  const empty=document.getElementById("emptyMsg");
+  if(!filtered.length){tbody.innerHTML="";empty.style.display="block";return;}
+  empty.style.display="none";
+  tbody.innerHTML=filtered.map(c=>{
+    const ri=codes.indexOf(c);
+    const tc=c.type==="cruise"?"t-cruise":c.type==="river"?"t-river":"t-other";
+    const tl=c.type==="cruise"?"🚢 קרוז ים":c.type==="river"?"🚤 שייטת נהרות":"✈️ אחר";
+    return `<tr>
+      <td><span class="code-badge">${c.code}</span></td>
+      <td><input class="name-input" type="text" value="${c.name}" placeholder="שם הטיול..." onchange="updateName(${ri},this.value)"/></td>
+      <td>
+        <select class="type-sel" onchange="updateType(${ri},this.value)">
+          <option value="cruise" ${c.type==="cruise"?"selected":""}>🚢 קרוז ים</option>
+          <option value="river" ${c.type==="river"?"selected":""}>🚤 שייטת נהרות</option>
+          <option value="other" ${c.type==="other"?"selected":""}>✈️ אחר</option>
+        </select>
+      </td>
+      <td><button class="btn btn-del" onclick="deleteCode(${ri})">מחק</button></td>
+    </tr>`;
+  }).join("");
+}
+
+function addCode(){
+  const code=document.getElementById("newCode").value.trim().toUpperCase();
+  const name=document.getElementById("newName").value.trim();
+  const type=document.getElementById("newType").value;
+  if(!code){showMsg("הכנס קוד","red");return;}
+  if(codes.find(c=>c.code===code)){showMsg("קוד זה כבר קיים","red");return;}
+  codes.push({code,name,type});
+  codes.sort((a,b)=>a.code.localeCompare(b.code));
+  document.getElementById("newCode").value="";
+  document.getElementById("newName").value="";
+  save();renderTable();
+  showMsg("✓ קוד "+code+" נוסף");
+}
+
+function updateName(i,v){codes[i].name=v;}
+function updateType(i,v){codes[i].type=v;renderTable();}
+function deleteCode(i){if(confirm("למחוק את הקוד "+codes[i].code+"?")){codes.splice(i,1);save();renderTable();}}
+
+function saveAll(){save();showMsg("✓ נשמר בהצלחה");}
+
+function exportJSON(){
+  const blob=new Blob([JSON.stringify(codes,null,2)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="cruise_codes.json";a.click();
+  showMsg("✓ קובץ JSON יוצא");
+}
+
+function showMsg(txt,color=""){
+  const el=document.getElementById("savedMsg");
+  el.textContent=txt;el.style.color=color==="red"?"#F0827A":"#1DB8A0";
+  setTimeout(()=>el.textContent="",2500);
+}
+
+load();
+</script>
+</body>
+</html>
