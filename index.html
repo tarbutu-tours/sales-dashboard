@@ -129,8 +129,11 @@ function Donut({calls, ib, ob, ms, dur, rate, ok}) {
   </>;
 }
 
-function LeadsTable({open, sm, um}) {
-  const rows=open.map(d=>({...d,_d:daysIn(d)})).sort((a,b)=>b._d-a._d).slice(0,15);
+function LeadsTable({open, sm, um, filterAgent, filterStage}) {
+  const rows=open
+    .filter(d=>filterAgent==="all"||(d.user_id?.id||d.user_id)===Number(filterAgent))
+    .filter(d=>filterStage==="all"||String(d.stage_id)===filterStage)
+    .map(d=>({...d,_d:daysIn(d)})).sort((a,b)=>b._d-a._d).slice(0,30);
   if(!rows.length) return <div style={{color:T.muted,fontSize:12,textAlign:"center",padding:"1.5rem"}}>אין עסקאות</div>;
   return <div style={{overflowX:"auto"}}>
     <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,tableLayout:"fixed"}}>
@@ -183,7 +186,19 @@ function ProductsTab({products, codeMap}) {
     const parts=(p.name||"").split("-");
     return{...p,code:parts[0]||"",tripNum:parts[1]||"",roomType:parts.slice(2).join("-")||"",tripName:codeMap[parts[0]]||""};
   });
-  const filtered=parsed.filter(p=>{const q=search.toLowerCase();return!q||p.name.toLowerCase().includes(q)||p.tripName.toLowerCase().includes(q)||p.roomType.toLowerCase().includes(q);});
+  const [invFreeOnly,setInvFreeOnly]=useState(false);
+  const [invTripCode,setInvTripCode]=useState("all");
+  const [invRoomType,setInvRoomType]=useState("all");
+  const allCodes=[...new Set(parsed.map(p=>p.code))].sort();
+  const allRoomTypes=[...new Set(parsed.map(p=>p.roomType).filter(Boolean))].sort();
+  const filtered=parsed.filter(p=>{
+    const q=search.toLowerCase();
+    const matchSearch=!q||p.name.toLowerCase().includes(q)||p.tripName.toLowerCase().includes(q)||p.roomType.toLowerCase().includes(q);
+    const matchFree=!invFreeOnly||(Number(p[F_FREE])||0)>0;
+    const matchCode=invTripCode==="all"||p.code===invTripCode;
+    const matchRoom=invRoomType==="all"||p.roomType===invRoomType;
+    return matchSearch&&matchFree&&matchCode&&matchRoom;
+  });
   const F_FREE = "e3799fcad3543e1361f596e6ba63a4e93b05fb41";
   const F_USED = "e72bd51506f19955a82bc8073b6478cf69e50bbb";
   const F_TOTAL = "8037c7753cb6e2aa2c8088c90f71139df06e6116";
@@ -197,8 +212,24 @@ function ProductsTab({products, codeMap}) {
       <Kpi label="✅ פנויים" value={totalFree} color={T.teal} dc={T.teal}/>
       <Kpi label="🔒 תפוסים" value={totalUsed} color={T.gold} dc={T.gold}/>
     </div>
-    <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 חפש..."
-      style={{background:T.navyCard,border:"1px solid "+T.border,color:"#F0F4F8",fontSize:12,padding:"8px 12px",borderRadius:8,width:"100%",marginBottom:10,direction:"rtl"}}/>
+    <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap",alignItems:"center"}}>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 חפש..."
+        style={{background:T.navyCard,border:"1px solid "+T.border,color:"#F0F4F8",fontSize:12,padding:"8px 12px",borderRadius:8,flex:1,minWidth:150,direction:"rtl"}}/>
+      <select value={invTripCode} onChange={e=>setInvTripCode(e.target.value)}
+        style={{background:T.navyCard,border:"1px solid "+T.border,color:"#F0F4F8",fontSize:12,padding:"7px 10px",borderRadius:6,cursor:"pointer"}}>
+        <option value="all">כל הקודים</option>
+        {allCodes.map(c=><option key={c} value={c}>{c}{codeMap[c]?" – "+codeMap[c]:""}</option>)}
+      </select>
+      <select value={invRoomType} onChange={e=>setInvRoomType(e.target.value)}
+        style={{background:T.navyCard,border:"1px solid "+T.border,color:"#F0F4F8",fontSize:12,padding:"7px 10px",borderRadius:6,cursor:"pointer"}}>
+        <option value="all">כל סוגי חדר</option>
+        {allRoomTypes.map(r=><option key={r} value={r}>{r}</option>)}
+      </select>
+      <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:T.teal,cursor:"pointer",whiteSpace:"nowrap"}}>
+        <input type="checkbox" checked={invFreeOnly} onChange={e=>setInvFreeOnly(e.target.checked)} style={{cursor:"pointer"}}/>
+        פנויים בלבד
+      </label>
+    </div>
     <div style={{overflowX:"auto"}}>
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
         <thead><tr>{["שם מוצר","קוד","סוג חדר","פנויים","תפוסים","סה״כ"].map(h=>
@@ -238,6 +269,13 @@ function App() {
   const [data,setData]   = useState(null);
   const [errs,setErrs]   = useState([]);
   const [codeMap,setCodeMap] = useState({});
+  const [filterAgent,setFilterAgent] = useState("all");
+  const [filterStage,setFilterStage] = useState("all");
+  const [filterLost,setFilterLost] = useState("all");
+  const [filterSource,setFilterSource] = useState("all");
+  const [filterFreeOnly,setFilterFreeOnly] = useState(false);
+  const [filterTripCode,setFilterTripCode] = useState("all");
+  const [filterRoomType,setFilterRoomType] = useState("all");
 
   useEffect(()=>{
     try{
@@ -412,8 +450,20 @@ function App() {
           </>}
 
           {tab==="leads"&&<>
+            <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap",alignItems:"center"}}>
+              <select value={filterAgent} onChange={e=>setFilterAgent(e.target.value)}
+                style={{background:T.navyCard,border:"1px solid "+T.border,color:"#F0F4F8",fontSize:12,padding:"6px 10px",borderRadius:6,cursor:"pointer"}}>
+                <option value="all">כל הנציגים</option>
+                {Object.entries(um).map(([id,name])=><option key={id} value={id}>{name}</option>)}
+              </select>
+              <select value={filterStage} onChange={e=>setFilterStage(e.target.value)}
+                style={{background:T.navyCard,border:"1px solid "+T.border,color:"#F0F4F8",fontSize:12,padding:"6px 10px",borderRadius:6,cursor:"pointer"}}>
+                <option value="all">כל השלבים</option>
+                {Object.entries(sm).map(([id,name])=><option key={id} value={id}>{name}</option>)}
+              </select>
+            </div>
             <SecDiv color={T.gold}>כל העסקאות הפתוחות</SecDiv>
-            <div style={card}><LeadsTable open={open} sm={sm} um={um}/></div>
+            <div style={card}><LeadsTable open={open} sm={sm} um={um} filterAgent={filterAgent} filterStage={filterStage}/></div>
           </>}
         </>;
       })()}
