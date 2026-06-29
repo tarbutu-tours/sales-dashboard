@@ -259,12 +259,11 @@ function App() {
     setStatus("שולף עסקאות...");
 
     const [deals,acts,users,stages,products,callsRaw]=await Promise.all([
-      Promise.all([
+    const [deals,acts,users,stages,products,callsRaw]=await Promise.all([
       Promise.all([
         pdAll("/deals?status=all&filter_id=116295").catch(()=>[]),
         pdAll("/deals?status=all&filter_id=116296").catch(()=>[])
-      ]).then(([open_d, won_d]) => [...open_d, ...won_d]).catch(ex=>{e.push("Pipedrive: "+ex.message);return[]}),
-    ]).then(([o,w])=>[...o,...w]).catch(ex=>{e.push("Pipedrive: "+ex.message);return[]}),
+      ]).then(([a,b])=>[...a,...b]).catch(()=>[]),
       Promise.resolve([]),
       pdAll("/users").catch(()=>[]),
       pdAll("/stages").catch(()=>[]),
@@ -272,6 +271,7 @@ function App() {
       acGet("/calls?order=DESC&per_page=50&from="+sinceTs).catch(ex=>{e.push("Aircall: "+ex.message);return null})
     ]);
 
+    setStatus("מעבד...");
     setStatus("מעבד...");
 
     const open=deals.filter(x=>x.status==="open"&&x.add_time&&x.add_time>="2026-01-01");
