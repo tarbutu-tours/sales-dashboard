@@ -270,10 +270,10 @@ function App() {
 
     setStatus("מעבד...");
 
-    const open=deals.filter(x=>x.status==="open");
-    const won=deals.filter(x=>x.status==="won");
+    const open=deals.filter(x=>x.status==="open"&&x.add_time&&x.add_time>="2026-01-01");
+    const won=deals.filter(x=>x.status==="won"&&x.won_time&&x.won_time>="2026-01-01");
     // עסקאות חדשות בטווח שנבחר
-    const newDeals=deals.filter(d=>d.add_time&&d.add_time.substring(0,10)>=fromStr&&d.add_time.substring(0,10)<=toStr);
+    const newDeals=deals.filter(d=>d.add_time&&d.add_time.substring(0,10)>=fromStr&&d.add_time.substring(0,10)<=toStr&&d.add_time>="2026-01-01");
     const recW=won.filter(x=>x.won_time&&x.won_time.substring(0,10)>=fromStr&&x.won_time.substring(0,10)<=toStr);
     const pVal=open.reduce((s,x)=>s+(Number(x.value)||0),0);
 
