@@ -29,7 +29,14 @@ const T = { navy:"#0B1F3A", navyMid:"#132847", navyCard:"#1A3257", teal:"#1DB8A0
 const card = { background:T.navyCard, border:"1px solid "+T.border, borderRadius:12, padding:"14px 16px" };
 const ct = { fontSize:11, color:T.muted, fontWeight:600, marginBottom:10, textTransform:"uppercase", letterSpacing:".05em" };
 
-const fmt = v => { if(!v||isNaN(v))return"₪0"; v=Number(v); if(v>=1000000)return"₪"+(v/1000000).toFixed(1)+"M"; if(v>=1000)return"₪"+Math.round(v/1000)+"K"; return"₪"+Math.round(v).toLocaleString("he-IL"); };
+const ILS_TO_USD = 3.7;
+const fmt = v => {
+  if(!v||isNaN(v))return"$0";
+  v=Number(v)/ILS_TO_USD;
+  if(v>=1000000)return"$"+(v/1000000).toFixed(1)+"M";
+  if(v>=1000)return"$"+Math.round(v/1000)+"K";
+  return"$"+Math.round(v).toLocaleString("en-US");
+};
 const daysIn = d => { if(!d.stage_change_time)return 0; return Math.floor((Date.now()-new Date(d.stage_change_time))/86400000); };
 const mmss = s => Math.floor(s/60)+":"+String(s%60).padStart(2,"0");
 
@@ -159,10 +166,13 @@ function LeadsTable({open, sm, um, filterAgent, filterStage}) {
   </div>;
 }
 
-function TeamBars({open, won, um}) {
+function TeamBars({open, won, um, activeOnly}) {
   const b={};
   [...open,...(won||[])].forEach(d=>{const uid=d.user_id?.id||d.user_id;if(!b[uid])b[uid]={name:um[uid]||"–",c:0,v:0};b[uid].c++;b[uid].v+=Number(d.value)||0;});
-  const arr=Object.values(b).sort((a,x)=>x.c-a.c);
+  const ACTIVE = ["avi","rahelz","rahel"];
+  const arr=Object.values(b)
+    .filter(u=>ACTIVE.some(n=>u.name.toLowerCase().includes(n)))
+    .sort((a,x)=>x.c-a.c);
   const max=arr[0]?.c||1;
   if(!arr.length) return <div style={{color:T.muted,fontSize:12}}>אין נציגים</div>;
   return <div>{arr.map((u,i)=>{
@@ -189,13 +199,13 @@ function ProductsTab({products, codeMap}) {
   const [invFreeOnly,setInvFreeOnly]=useState(false);
   const [invTripCode,setInvTripCode]=useState("all");
   const [invRoomType,setInvRoomType]=useState("all");
-  const parsed2026=parsed.filter(p=>p.tripNum&&Number("20"+p.tripNum.substring(0,2))>=2026);
+  const parsed2026=parsed.filter(p=>p.tripNum&&p.tripNum.length>=4&&Number(p.tripNum.substring(0,4))>=2026);
   const allCodes=[...new Set(parsed2026.map(p=>p.code))].sort();
   const allRoomTypes=[...new Set(parsed.map(p=>p.roomType).filter(Boolean))].sort();
   const filtered=parsed2026.filter(p=>{
     const q=search.toLowerCase();
     const matchSearch=!q||p.name.toLowerCase().includes(q)||p.tripName.toLowerCase().includes(q)||p.roomType.toLowerCase().includes(q);
-    const freeVal=Number(p[F_FREE])||Number(p.quantity_available)||0; const matchFree=!invFreeOnly||freeVal>0;
+    const freeVal=Number(p[F_FREE])||Number(p.quantity_available)||0; const matchFree=!invFreeOnly||freeVal>0; void freeVal;
     const matchCode=invTripCode==="all"||p.code===invTripCode;
     const matchRoom=invRoomType==="all"||p.roomType===invRoomType;
     return matchSearch&&matchFree&&matchCode&&matchRoom;
@@ -237,7 +247,7 @@ function ProductsTab({products, codeMap}) {
           <th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"6px 8px",borderBottom:"1px solid "+T.border,fontSize:10,textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>
         )}</tr></thead>
         <tbody>{filtered.map(p=>{
-          const free=Number(p[F_FREE])||Number(p.quantity_available)||0;
+          const free=Number(p[F_FREE])||Number(p.quantity_available)||0; // free rooms
           const used=Number(p[F_USED])||0;
           const total=Number(p[F_TOTAL])||free+used;
           const col=getRoomColor(p.roomType);
@@ -437,18 +447,44 @@ function App() {
               </div>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <div style={card}><div style={ct}>נציגים</div><TeamBars open={open} won={won} um={um}/></div>
+              <div style={card}>
+                <div style={ct}>נציגים – מכירות</div>
+                <TeamBars open={open} won={won} um={um}/>
+                <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid "+T.border}}>
+                  {(()=>{
+                    const SHOW=["avi","rahelz","rahel"];
+                    const sales={};
+                    won.forEach(d=>{
+                      const uid=d.user_id?.id||d.user_id;
+                      const name=um[uid]||"";
+                      if(!SHOW.some(n=>name.toLowerCase().includes(n)))return;
+                      if(!sales[uid])sales[uid]={name,count:0,val:0};
+                      sales[uid].count++;
+                      sales[uid].val+=Number(d.value)||0;
+                    });
+                    return Object.values(sales).sort((a,b)=>b.count-a.count).map(s=>
+                      <div key={s.name} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:"1px solid "+T.border}}>
+                        <span style={{fontSize:12,color:T.muted}}>{s.name.split(" ")[0]}</span>
+                        <div style={{display:"flex",gap:10}}>
+                          <span style={{fontSize:12,fontWeight:600,color:T.teal}}>{s.count} עסקאות</span>
+                          <span style={{fontSize:12,fontWeight:600,color:T.gold}}>{fmt(s.val)}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
               <div style={card}>
                 <div style={ct}>נסגרו לאחרונה</div>
                 {won.sort((a,b)=>new Date(b.won_time||0)-new Date(a.won_time||0)).slice(0,5).map(x=>{
                   const cruiseName=x.title?x.title.split("-").slice(0,2).join("-"):"";
-                  const usdVal=x.value?Math.round(Number(x.value)/3.7):"–";
+                  const usdVal=x.value?fmt(x.value):"–";
                   return <div key={x.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid "+T.border}}>
                     <div>
                       <div style={{fontSize:11,color:T.muted}}>{(x.title||"").substring(0,22)}</div>
                       {cruiseName&&<div style={{fontSize:10,color:T.teal}}>{cruiseName}</div>}
                     </div>
-                    <span style={{fontSize:12,fontWeight:600,color:T.teal}}>${usdVal}</span>
+                    <span style={{fontSize:12,fontWeight:600,color:T.teal}}>{usdVal}</span>
                   </div>;
                 })}
                 {!won.length&&<div style={{color:T.muted,fontSize:12}}>אין עסקאות</div>}
