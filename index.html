@@ -263,7 +263,7 @@ function App() {
       Promise.all([
         pdAll("/deals?status=all&filter_id=116295").catch(()=>[]),
         pdAll("/deals?status=all&filter_id=116296").catch(()=>[])
-      ]).then(([a,b])=>[...a,...b]).catch(()=>[]),
+      ]).then(([a,b])=>[...a,...b]).catch(ex=>{e.push("Pipedrive: "+ex.message);return[]}),
       Promise.resolve([]),
       pdAll("/users").catch(()=>[]),
       pdAll("/stages").catch(()=>[]),
