@@ -259,7 +259,7 @@ function App() {
     const [deals,acts,users,stages,products,callsRaw]=await Promise.all([
       Promise.all([
       pdAll("/deals?status=open").catch(()=>[]),
-      pdAll("/deals?status=won&sort=won_time+DESC").catch(()=>[])
+      pdAll("/deals?status=won").catch(()=>[])
     ]).then(([o,w])=>[...o,...w]).catch(ex=>{e.push("Pipedrive: "+ex.message);return[]}),
       pdAll("/activities?done=0").catch(()=>[]),
       pdAll("/users").catch(()=>[]),
