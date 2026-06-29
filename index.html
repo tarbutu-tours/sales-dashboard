@@ -24,67 +24,63 @@ const PD_TOKEN = "e30e3a85a358ecf8918b588d8af2fc31de1672dd";
 const AC_ID    = "c7974dd8b8bb959624fe606ef9ee4559";
 const AC_SEC   = "563ab5bc0049de0bdd0159193fc5e0c7";
 const WORKER   = "https://floral-bonus-cfa3.yanivd.workers.dev";
-
-const fmt = v => { if(!v||isNaN(v))return"₪0"; v=Number(v); if(v>=1000000)return"₪"+(v/1000000).toFixed(1)+"M"; if(v>=1000)return"₪"+Math.round(v/1000)+"K"; return"₪"+Math.round(v).toLocaleString("he-IL"); };
-const daysIn = d => { if(!d.stage_change_time)return 0; return Math.floor((Date.now()-new Date(d.stage_change_time))/86400000); };
-const mmss = s => Math.floor(s/60)+":"+String(s%60).padStart(2,"0");
-const COLORS = ["#1DB8A0","#1A9AE0","#F0B429","#E84855","#7B68EE","#F06292"];
+const COLORS   = ["#1DB8A0","#1A9AE0","#F0B429","#E84855","#7B68EE","#F06292"];
 const T = { navy:"#0B1F3A", navyMid:"#132847", navyCard:"#1A3257", teal:"#1DB8A0", gold:"#F0B429", red:"#E84855", muted:"#7A9BBF", border:"rgba(255,255,255,0.07)" };
 const card = { background:T.navyCard, border:"1px solid "+T.border, borderRadius:12, padding:"14px 16px" };
 const ct = { fontSize:11, color:T.muted, fontWeight:600, marginBottom:10, textTransform:"uppercase", letterSpacing:".05em" };
 
-// שולף דרך Worker
-async function wfetch(url, hdrs={}) {
-  const r = await fetch(WORKER+"?url="+encodeURIComponent(url), { headers:hdrs, signal:AbortSignal.timeout(20000) });
+const fmt = v => { if(!v||isNaN(v))return"₪0"; v=Number(v); if(v>=1000000)return"₪"+(v/1000000).toFixed(1)+"M"; if(v>=1000)return"₪"+Math.round(v/1000)+"K"; return"₪"+Math.round(v).toLocaleString("he-IL"); };
+const daysIn = d => { if(!d.stage_change_time)return 0; return Math.floor((Date.now()-new Date(d.stage_change_time))/86400000); };
+const mmss = s => Math.floor(s/60)+":"+String(s%60).padStart(2,"0");
+
+async function wfetch(url, hdrs) {
+  const r = await fetch(WORKER+"?url="+encodeURIComponent(url), { headers:hdrs||{}, signal:AbortSignal.timeout(20000) });
   if(!r.ok) throw new Error(r.status);
   return r.json();
 }
 
-// שולף כל העמודים מ-Pipedrive
 async function pdAll(ep) {
   let all=[], start=0;
   while(true) {
     const url = "https://api.pipedrive.com/v1"+ep+(ep.includes("?")?"&":"?")+"api_token="+PD_TOKEN+"&limit=100&start="+start;
     const j = await wfetch(url);
     if(!j.success) break;
-    const data = j.data||[];
-    all = [...all, ...data];
+    all = [...all, ...(j.data||[])];
     if(!j.additional_data?.pagination?.more_items_in_collection) break;
     start = j.additional_data.pagination.next_start;
-    if(all.length > 1000) break; // בטיחות
+    if(all.length>1000) break;
   }
   return all;
 }
 
 async function acGet(ep) {
-  const url = "https://api.aircall.io/v1"+ep;
-  return wfetch(url, { "Authorization":"Basic "+btoa(AC_ID+":"+AC_SEC) });
+  return wfetch("https://api.aircall.io/v1"+ep, {"Authorization":"Basic "+btoa(AC_ID+":"+AC_SEC)});
 }
 
-function SecDiv({color=T.teal, children}) {
+function SecDiv({color, children}) {
   return <div style={{fontSize:11,color:T.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:".08em",margin:"14px 0 6px",paddingBottom:5,borderBottom:"1px solid "+T.border,display:"flex",alignItems:"center",gap:7}}>
-    <div style={{width:3,height:13,borderRadius:2,background:color,flexShrink:0}}/>
+    <div style={{width:3,height:13,borderRadius:2,background:color||T.teal,flexShrink:0}}/>
     {children}
   </div>;
 }
 
-function Kpi({label, value, delta, color=T.teal, dc}) {
+function Kpi({label, value, delta, color, dc}) {
   return <div style={{...card,position:"relative",overflow:"hidden"}}>
-    <div style={{position:"absolute",top:0,right:0,width:3,height:"100%",background:color}}/>
+    <div style={{position:"absolute",top:0,right:0,width:3,height:"100%",background:color||T.teal}}/>
     <div style={{fontSize:11,color:T.muted,marginBottom:5}}>{label}</div>
     <div style={{fontSize:26,fontWeight:700,lineHeight:1}}>{value}</div>
     {delta&&<div style={{fontSize:11,marginTop:4,color:dc||T.muted}}>{delta}</div>}
   </div>;
 }
 
-function Alert({type="gold", children}) {
+function Alert({type, children}) {
   const s = type==="red" ? {bg:"rgba(232,72,85,.1)",br:"rgba(232,72,85,.25)",c:"#F0827A"} : {bg:"rgba(240,180,41,.08)",br:"rgba(240,180,41,.25)",c:T.gold};
   return <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",borderRadius:8,fontSize:12,marginBottom:8,background:s.bg,border:"1px solid "+s.br,color:s.c}}>{children}</div>;
 }
 
 function Funnel({open, sm}) {
   const sc={};
-  open.forEach(d=>{const n=sm[d.stage_id]||"אחר";sc[n]=(sc[n]||0)+1});
+  open.forEach(d=>{const n=sm[d.stage_id]||"אחר";sc[n]=(sc[n]||0)+1;});
   const arr=Object.entries(sc).sort((a,b)=>b[1]-a[1]);
   const max=arr[0]?.[1]||1;
   if(!arr.length) return <div style={{color:T.muted,fontSize:12}}>אין עסקאות</div>;
@@ -100,9 +96,10 @@ function Funnel({open, sm}) {
 }
 
 function Donut({calls, ib, ob, ms, dur, rate, ok}) {
-  if(!ok) return <div style={{color:T.muted,fontSize:12,lineHeight:1.8}}>⚠️ Aircall לא מחובר<br/><small style={{fontSize:10}}>פנה ל-Aircall Support</small></div>;
+  if(!ok) return <div style={{color:T.muted,fontSize:12,lineHeight:1.8}}>⚠️ Aircall לא מחובר</div>;
   if(!calls.length) return <div style={{color:T.muted,fontSize:12}}>אין שיחות</div>;
-  const tot=calls.length, r1=Math.round(ib.length/tot*188), r2=Math.round(ob.length/tot*188), r3=Math.round(ms.length/tot*188);
+  const tot=calls.length;
+  const r1=Math.round(ib.length/tot*188), r2=Math.round(ob.length/tot*188), r3=Math.round(ms.length/tot*188);
   return <>
     <div style={{display:"flex",alignItems:"center",gap:14}}>
       <svg width="84" height="84" viewBox="0 0 84 84">
@@ -133,7 +130,7 @@ function Donut({calls, ib, ob, ms, dur, rate, ok}) {
 }
 
 function LeadsTable({open, sm, um}) {
-  const rows = open.map(d=>({...d,_d:daysIn(d)})).sort((a,b)=>b._d-a._d).slice(0,15);
+  const rows=open.map(d=>({...d,_d:daysIn(d)})).sort((a,b)=>b._d-a._d).slice(0,15);
   if(!rows.length) return <div style={{color:T.muted,fontSize:12,textAlign:"center",padding:"1.5rem"}}>אין עסקאות</div>;
   return <div style={{overflowX:"auto"}}>
     <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,tableLayout:"fixed"}}>
@@ -161,7 +158,7 @@ function LeadsTable({open, sm, um}) {
 
 function TeamBars({open, um}) {
   const b={};
-  open.forEach(d=>{const uid=d.user_id?.id||d.user_id;if(!b[uid])b[uid]={name:um[uid]||"–",c:0,v:0};b[uid].c++;b[uid].v+=Number(d.value)||0});
+  open.forEach(d=>{const uid=d.user_id?.id||d.user_id;if(!b[uid])b[uid]={name:um[uid]||"–",c:0,v:0};b[uid].c++;b[uid].v+=Number(d.value)||0;});
   const arr=Object.values(b).sort((a,x)=>x.c-a.c);
   const max=arr[0]?.c||1;
   if(!arr.length) return <div style={{color:T.muted,fontSize:12}}>אין נציגים</div>;
@@ -181,14 +178,17 @@ function TeamBars({open, um}) {
 function ProductsTab({products, codeMap}) {
   const [search,setSearch]=useState("");
   const roomColors={"פנימי":"#1A9AE0","חלון":"#1DB8A0","מרפסת":"#F0B429","דק עליון":"#7B68EE","דק אמצעי":"#F06292"};
-  const getRoomColor=rt=>{for(const [k,v] of Object.entries(roomColors))if(rt&&rt.includes(k))return v;return"#888"};
+  const getRoomColor=rt=>{for(const [k,v] of Object.entries(roomColors))if(rt&&rt.includes(k))return v;return"#888";};
   const parsed=products.map(p=>{
     const parts=(p.name||"").split("-");
     return{...p,code:parts[0]||"",tripNum:parts[1]||"",roomType:parts.slice(2).join("-")||"",tripName:codeMap[parts[0]]||""};
   });
-  const filtered=parsed.filter(p=>{const q=search.toLowerCase();return!q||p.name.toLowerCase().includes(q)||p.tripName.toLowerCase().includes(q)||p.roomType.toLowerCase().includes(q)});
-  const totalFree=parsed.reduce((s,p)=>s+(Number(p["e3799fcad3543e1361f596e6ba63a4e93b05fb41"])||Number(p.quantity_available)||0),0);
-  const totalUsed=parsed.reduce((s,p)=>s+(Number(p["e72bd51506f19955a82bc8073b6478cf69e50bbb"])||Number(p.quantity_used)||0),0);
+  const filtered=parsed.filter(p=>{const q=search.toLowerCase();return!q||p.name.toLowerCase().includes(q)||p.tripName.toLowerCase().includes(q)||p.roomType.toLowerCase().includes(q);});
+  const F_FREE = "e3799fcad3543e1361f596e6ba63a4e93b05fb41";
+  const F_USED = "e72bd51506f19955a82bc8073b6478cf69e50bbb";
+  const F_TOTAL = "8037c7753cb6e2aa2c8088c90f71139df06e6116";
+  const totalFree=parsed.reduce((s,p)=>s+(Number(p[F_FREE])||0),0);
+  const totalUsed=parsed.reduce((s,p)=>s+(Number(p[F_USED])||0),0);
   const trips=[...new Set(parsed.map(p=>p.tripNum))].length;
   return <div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
@@ -205,9 +205,9 @@ function ProductsTab({products, codeMap}) {
           <th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"6px 8px",borderBottom:"1px solid "+T.border,fontSize:10,textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>
         )}</tr></thead>
         <tbody>{filtered.map(p=>{
-          const free=Number(p["e3799fcad3543e1361f596e6ba63a4e93b05fb41"])||Number(p.quantity_available)||0;
-          const used=Number(p["e72bd51506f19955a82bc8073b6478cf69e50bbb"])||Number(p.quantity_used)||0;
-          const total=Number(p["8037c7753cb6e2aa2c8088c90f71139df06e6116"])||Number(p.quantity)||free+used;
+          const free=Number(p[F_FREE])||0;
+          const used=Number(p[F_USED])||0;
+          const total=Number(p[F_TOTAL])||free+used;
           const col=getRoomColor(p.roomType);
           return <tr key={p.id} style={{borderBottom:"1px solid "+T.border}}>
             <td style={{padding:"8px",fontWeight:500}}>{p.name||"–"}</td>
@@ -231,22 +231,26 @@ function ProductsTab({products, codeMap}) {
 }
 
 function App() {
-  const [tab,setTab]=useState("main");
-  const [days,setDays]=useState(30);
-  const [loading,setLoading]=useState(true);
-  const [status,setStatus]=useState("טוען...");
-  const [data,setData]=useState(null);
-  const [errs,setErrs]=useState([]);
-  const [codeMap,setCodeMap]=useState({});
+  const [tab,setTab]     = useState("main");
+  const [days,setDays]   = useState(30);
+  const [loading,setLoading] = useState(true);
+  const [status,setStatus]   = useState("טוען...");
+  const [data,setData]   = useState(null);
+  const [errs,setErrs]   = useState([]);
+  const [codeMap,setCodeMap] = useState({});
 
   useEffect(()=>{
-    try{const s=localStorage.getItem("cruise_codes");if(s){const arr=JSON.parse(s);const m={};arr.forEach(c=>{m[c.code]=c.name});setCodeMap(m);}}catch(e){}
+    try{
+      const s=localStorage.getItem("cruise_codes");
+      if(s){const arr=JSON.parse(s);const m={};arr.forEach(c=>{m[c.code]=c.name;});setCodeMap(m);}
+    }catch(e){}
   },[]);
 
   const load=useCallback(async()=>{
-    setLoading(true);setErrs([]);
+    setLoading(true);
+    setErrs([]);
+    setStatus("שולף נתונים...");
 
-    // חישוב תאריכים
     const today=new Date();
     const todayStr=today.toISOString().split("T")[0];
     let fromStr, toStr, label;
@@ -256,43 +260,44 @@ function App() {
     const sinceTs=Math.floor(new Date(fromStr).getTime()/1000);
 
     const e=[];
-    setStatus("שולף עסקאות...");
 
-    const [deals,acts,users,stages,products,callsRaw]=await Promise.all([
-      Promise.all([
-        pdAll("/deals?status=all&filter_id=116295").catch(()=>[]),
-        pdAll("/deals?status=all&filter_id=116296").catch(()=>[])
-      ]).then(([a,b])=>[...a,...b]).catch(ex=>{e.push("Pipedrive: "+ex.message);return[]}),
-      Promise.resolve([]),
+    // שלב 1 – deals דרך filters
+    const openDeals = await pdAll("/deals?status=all&filter_id=116295").catch(ex=>{e.push("Pipedrive פתוחות: "+ex.message);return[];});
+    const wonDeals  = await pdAll("/deals?status=all&filter_id=116296").catch(ex=>{e.push("Pipedrive נסגרו: "+ex.message);return[];});
+    const deals = [...openDeals, ...wonDeals];
+
+    // שלב 2 – שאר הנתונים
+    const [users, stages, products, callsRaw] = await Promise.all([
       pdAll("/users").catch(()=>[]),
       pdAll("/stages").catch(()=>[]),
       pdAll("/products").catch(()=>[]),
-      acGet("/calls?order=DESC&per_page=50&from="+sinceTs).catch(ex=>{e.push("Aircall: "+ex.message);return null})
+      acGet("/calls?order=DESC&per_page=50&from="+sinceTs).catch(ex=>{e.push("Aircall: "+ex.message);return null;})
     ]);
 
-    setStatus("מעבד...");
-
-    const open=deals.filter(x=>x.status==="open"&&x.add_time&&x.add_time>="2026-01-01");
-    const won=deals.filter(x=>x.status==="won"&&x.won_time&&x.won_time>="2026-01-01");
-    // עסקאות חדשות בטווח שנבחר
-    const newDeals=deals.filter(d=>d.add_time&&d.add_time.substring(0,10)>=fromStr&&d.add_time.substring(0,10)<=toStr&&d.add_time>="2026-01-01");
-    const recW=won.filter(x=>x.won_time&&x.won_time.substring(0,10)>=fromStr&&x.won_time.substring(0,10)<=toStr);
-    const pVal=open.reduce((s,x)=>s+(Number(x.value)||0),0);
+    const open = deals.filter(x=>x.status==="open");
+    const won  = deals.filter(x=>x.status==="won");
+    const newDeals = deals.filter(d=>d.add_time&&d.add_time.substring(0,10)>=fromStr&&d.add_time.substring(0,10)<=toStr);
+    const recW = won.filter(x=>x.won_time&&x.won_time.substring(0,10)>=fromStr&&x.won_time.substring(0,10)<=toStr);
+    const pVal = open.reduce((s,x)=>s+(Number(x.value)||0),0);
 
     const sm={};stages.forEach(s=>sm[s.id]=s.name);
     const um={};users.forEach(u=>um[u.id]=u.name);
 
     let calls=[];
     const acOK=callsRaw!==null;
-    if(acOK){if(Array.isArray(callsRaw))calls=callsRaw;else if(callsRaw.calls)calls=callsRaw.calls;else if(callsRaw.data)calls=callsRaw.data;}
-    const ib=calls.filter(c=>c.direction==="inbound");
-    const ob=calls.filter(c=>c.direction==="outbound");
-    const ms=calls.filter(c=>c.missed===true||c.status==="missed"||(c.direction==="inbound"&&c.answered===false)||(c.direction==="inbound"&&!c.duration));
-    const ans=calls.filter(c=>c.answered===true||(c.duration>0&&c.status!=="missed"));
-    const dur=ans.length?Math.round(ans.reduce((s,c)=>s+(c.duration||0),0)/ans.length):0;
-    const rate=calls.length?Math.round((calls.length-ms.length)/calls.length*100):0;
+    if(acOK){
+      if(Array.isArray(callsRaw))calls=callsRaw;
+      else if(callsRaw.calls)calls=callsRaw.calls;
+      else if(callsRaw.data)calls=callsRaw.data;
+    }
+    const ib  = calls.filter(c=>c.direction==="inbound");
+    const ob  = calls.filter(c=>c.direction==="outbound");
+    const ms  = calls.filter(c=>c.missed===true||c.status==="missed"||(c.direction==="inbound"&&c.answered===false)||(c.direction==="inbound"&&!c.duration));
+    const ans = calls.filter(c=>c.answered===true||(c.duration>0&&c.status!=="missed"));
+    const dur = ans.length?Math.round(ans.reduce((s,c)=>s+(c.duration||0),0)/ans.length):0;
+    const rate= calls.length?Math.round((calls.length-ms.length)/calls.length*100):0;
 
-    setData({open,won,newDeals,recW,pVal,sm,um,acts,calls,acOK,ib,ob,ms,dur,rate,products,label,fromStr,toStr});
+    setData({open,won,newDeals,recW,pVal,sm,um,calls,acOK,ib,ob,ms,dur,rate,products,label});
     setErrs(e);
     setStatus("מחובר · "+new Date().toLocaleTimeString("he-IL"));
     setLoading(false);
@@ -340,7 +345,7 @@ function App() {
       {errs.map((e,i)=><Alert key={i} type="gold">⚠️ {e}</Alert>)}
 
       {data&&(()=>{
-        const {open,won,newDeals,recW,pVal,sm,um,acts,calls,acOK,ib,ob,ms,dur,rate,products,label}=data;
+        const {open,won,newDeals,recW,pVal,sm,um,calls,acOK,ib,ob,ms,dur,rate,products,label}=data;
         const stuck=open.filter(x=>daysIn(x)>14).length;
 
         if(tab==="inventory") return <ProductsTab products={products} codeMap={codeMap}/>;
@@ -379,17 +384,20 @@ function App() {
               <div style={card}><div style={ct}>שיחות Aircall</div><Donut calls={calls} ib={ib} ob={ob} ms={ms} dur={dur} rate={rate} ok={acOK}/></div>
               <div style={card}>
                 <div style={ct}>ערך לפי שלב</div>
-                {(()=>{const sv={};open.forEach(x=>{const n=sm[x.stage_id]||"אחר";sv[n]=(sv[n]||0)+(Number(x.value)||0)});
-                return Object.entries(sv).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([n,v])=>
-                  <div key={n} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid "+T.border}}>
-                    <span style={{fontSize:11,color:T.muted}}>{n.substring(0,18)}</span>
-                    <span style={{fontSize:12,fontWeight:600,color:T.teal}}>{fmt(v)}</span>
-                  </div>)})()}
+                {(()=>{
+                  const sv={};
+                  open.forEach(x=>{const n=sm[x.stage_id]||"אחר";sv[n]=(sv[n]||0)+(Number(x.value)||0);});
+                  return Object.entries(sv).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([n,v])=>
+                    <div key={n} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid "+T.border}}>
+                      <span style={{fontSize:11,color:T.muted}}>{n.substring(0,18)}</span>
+                      <span style={{fontSize:12,fontWeight:600,color:T.teal}}>{fmt(v)}</span>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
               <div style={card}><div style={ct}>נציגים</div><TeamBars open={open} um={um}/></div>
-
               <div style={card}>
                 <div style={ct}>נסגרו לאחרונה</div>
                 {won.sort((a,b)=>new Date(b.won_time||0)-new Date(a.won_time||0)).slice(0,5).map(x=>
