@@ -257,7 +257,10 @@ function App() {
     setStatus("שולף עסקאות...");
 
     const [deals,acts,users,stages,products,callsRaw]=await Promise.all([
-      pdAll("/deals?status=all").catch(ex=>{e.push("Pipedrive: "+ex.message);return[]}),
+      Promise.all([
+      pdAll("/deals?status=open").catch(()=>[]),
+      pdAll("/deals?status=won&sort=won_time+DESC").catch(()=>[])
+    ]).then(([o,w])=>[...o,...w]).catch(ex=>{e.push("Pipedrive: "+ex.message);return[]}),
       pdAll("/activities?done=0").catch(()=>[]),
       pdAll("/users").catch(()=>[]),
       pdAll("/stages").catch(()=>[]),
