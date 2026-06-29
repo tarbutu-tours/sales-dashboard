@@ -187,8 +187,8 @@ function ProductsTab({products, codeMap}) {
     return{...p,code:parts[0]||"",tripNum:parts[1]||"",roomType:parts.slice(2).join("-")||"",tripName:codeMap[parts[0]]||""};
   });
   const filtered=parsed.filter(p=>{const q=search.toLowerCase();return!q||p.name.toLowerCase().includes(q)||p.tripName.toLowerCase().includes(q)||p.roomType.toLowerCase().includes(q)});
-  const totalFree=parsed.reduce((s,p)=>s+(Number(p.quantity_available)||0),0);
-  const totalUsed=parsed.reduce((s,p)=>s+(Number(p.quantity_used)||0),0);
+  const totalFree=parsed.reduce((s,p)=>s+(Number(p["e3799fcad3543e1361f596e6ba63a4e93b05fb41"])||Number(p.quantity_available)||0),0);
+  const totalUsed=parsed.reduce((s,p)=>s+(Number(p["e72bd51506f19955a82bc8073b6478cf69e50bbb"])||Number(p.quantity_used)||0),0);
   const trips=[...new Set(parsed.map(p=>p.tripNum))].length;
   return <div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
@@ -205,7 +205,9 @@ function ProductsTab({products, codeMap}) {
           <th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"6px 8px",borderBottom:"1px solid "+T.border,fontSize:10,textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>
         )}</tr></thead>
         <tbody>{filtered.map(p=>{
-          const free=Number(p.quantity_available)||0,used=Number(p.quantity_used)||0,total=Number(p.quantity)||free+used;
+          const free=Number(p["e3799fcad3543e1361f596e6ba63a4e93b05fb41"])||Number(p.quantity_available)||0;
+          const used=Number(p["e72bd51506f19955a82bc8073b6478cf69e50bbb"])||Number(p.quantity_used)||0;
+          const total=Number(p["8037c7753cb6e2aa2c8088c90f71139df06e6116"])||Number(p.quantity)||free+used;
           const col=getRoomColor(p.roomType);
           return <tr key={p.id} style={{borderBottom:"1px solid "+T.border}}>
             <td style={{padding:"8px",fontWeight:500}}>{p.name||"–"}</td>
@@ -258,9 +260,12 @@ function App() {
 
     const [deals,acts,users,stages,products,callsRaw]=await Promise.all([
       Promise.all([
-      pdAll("/deals?status=all&filter_id=116295").catch(ex=>{e.push("Pipedrive: "+ex.message);return[]}),
+      Promise.all([
+        pdAll("/deals?status=all&filter_id=116295").catch(()=>[]),
+        pdAll("/deals?status=all&filter_id=116296").catch(()=>[])
+      ]).then(([open_d, won_d]) => [...open_d, ...won_d]).catch(ex=>{e.push("Pipedrive: "+ex.message);return[]}),
     ]).then(([o,w])=>[...o,...w]).catch(ex=>{e.push("Pipedrive: "+ex.message);return[]}),
-      pdAll("/activities?done=0").catch(()=>[]),
+      Promise.resolve([]),
       pdAll("/users").catch(()=>[]),
       pdAll("/stages").catch(()=>[]),
       pdAll("/products").catch(()=>[]),
@@ -386,14 +391,7 @@ function App() {
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
               <div style={card}><div style={ct}>נציגים</div><TeamBars open={open} um={um}/></div>
-              <div style={card}>
-                <div style={ct}>פעילויות קרובות</div>
-                {(acts||[]).slice(0,6).map(a=><div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid "+T.border}}>
-                  <div><div style={{fontSize:12}}>{(a.subject||"").substring(0,24)}</div><div style={{fontSize:10,color:T.muted}}>{a.type} · {a.due_date}</div></div>
-                  <span style={{fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:20,background:"rgba(240,180,41,.15)",color:T.gold}}>{a.due_date||"–"}</span>
-                </div>)}
-                {!acts?.length&&<div style={{color:T.muted,fontSize:12}}>אין פעילויות</div>}
-              </div>
+
               <div style={card}>
                 <div style={ct}>נסגרו לאחרונה</div>
                 {won.sort((a,b)=>new Date(b.won_time||0)-new Date(a.won_time||0)).slice(0,5).map(x=>
