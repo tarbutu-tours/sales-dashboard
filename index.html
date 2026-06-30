@@ -258,23 +258,40 @@ function AdsTab({won}) {
     try { localStorage.removeItem("ads_report"); } catch(e) {}
   }
 
+  function toISODate(d) {
+    return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+  }
+
+  function setRange(type) {
+    const today = new Date();
+    let from, to;
+    if (type === "today") { from = to = today; }
+    else if (type === "yesterday") { from = to = new Date(today.getTime()-86400000); }
+    else if (type === "7d") { from = new Date(today.getTime()-6*86400000); to = today; }
+    else if (type === "month") { from = new Date(today.getFullYear(), today.getMonth(), 1); to = today; }
+    else if (type === "quarter") { const qm = Math.floor(today.getMonth()/3)*3; from = new Date(today.getFullYear(), qm, 1); to = today; }
+    const f = toISODate(from), t = toISODate(to);
+    setDateFrom(f); setDateTo(t);
+    saveState(report, f, t, fileName);
+  }
+
   // הכנסה מעסקאות שנסגרו בטווח התאריכים שנבחר ידנית
-  const revenue = (() => {
-    if (!dateFrom || !dateTo || !won) return 0;
-    return won
-      .filter(x => x.won_time && x.won_time.substring(0,10) >= dateFrom && x.won_time.substring(0,10) <= dateTo)
-      .reduce((s,x) => s + (Number(x.value)||0) * ILS_TO_USD, 0); // המרה חזרה לשקלים לצורך חישוב ROI עקבי
+  const matchedDeals = (() => {
+    if (!dateFrom || !dateTo || !won) return [];
+    return won.filter(x => x.won_time && x.won_time.substring(0,10) >= dateFrom && x.won_time.substring(0,10) <= dateTo);
   })();
+  const revenue = matchedDeals.reduce((s,x) => s + (Number(x.value)||0) * ILS_TO_USD, 0); // x.value הוא בדולרים; ממירים לשקלים לצורך השוואה עקבית מול ההוצאה
 
   const cpl = report && report.totalConv > 0 ? report.totalCost / report.totalConv : 0;
   const roi = report && report.totalCost > 0 && revenue > 0 ? revenue / report.totalCost : null;
 
   const inputStyle = {background:T.navyCard,border:"1px solid "+T.border,color:"#F0F4F8",fontSize:12,padding:"6px 10px",borderRadius:6};
+  const rangeBtnStyle = {...inputStyle,cursor:"pointer"};
 
   return <div>
     <div style={{...card,marginBottom:12}}>
       <div style={ct}>העלאת דוח Google Ads</div>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:8}}>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:10}}>
         <label style={{...inputStyle,cursor:"pointer",background:T.teal,color:"#06251f",fontWeight:600,border:"none"}}>
           📁 בחר קובץ CSV
           <input type="file" accept=".csv" onChange={handleFile} style={{display:"none"}}/>
@@ -282,11 +299,20 @@ function AdsTab({won}) {
         {fileName && <span style={{fontSize:11,color:T.muted}}>{fileName}</span>}
         {report && <button onClick={clearReport} style={{...inputStyle,cursor:"pointer",color:T.red}}>🗑 נקה</button>}
       </div>
+
+      <div style={{fontSize:11,color:T.muted,marginBottom:6}}>תקופת ההשוואה (לחישוב ROI מול עסקאות שנסגרו ב-Pipedrive):</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginBottom:8}}>
+        <button onClick={()=>setRange("today")} style={rangeBtnStyle}>היום</button>
+        <button onClick={()=>setRange("yesterday")} style={rangeBtnStyle}>אתמול</button>
+        <button onClick={()=>setRange("7d")} style={rangeBtnStyle}>7 ימים אחרונים</button>
+        <button onClick={()=>setRange("month")} style={rangeBtnStyle}>החודש</button>
+        <button onClick={()=>setRange("quarter")} style={rangeBtnStyle}>הרבעון</button>
+      </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-        <span style={{fontSize:11,color:T.muted}}>תקופת ההשוואה (לחישוב ROI מול עסקאות שנסגרו):</span>
         <input type="date" value={dateFrom} onChange={e=>{const v=e.target.value; setDateFrom(v); saveState(report,v,dateTo,fileName);}} style={inputStyle}/>
         <span style={{fontSize:11,color:T.muted}}>עד</span>
         <input type="date" value={dateTo} onChange={e=>{const v=e.target.value; setDateTo(v); saveState(report,dateFrom,v,fileName);}} style={inputStyle}/>
+        {dateFrom && dateTo && <span style={{fontSize:11,color:T.muted}}>נמצאו {matchedDeals.length} עסקאות שנסגרו בטווח זה</span>}
       </div>
       {err && <div style={{marginTop:8}}><Alert type="red">⚠️ {err}</Alert></div>}
       {uploadedAt && <div style={{fontSize:10,color:T.muted,marginTop:8}}>עודכן לאחרונה: {uploadedAt}</div>}
@@ -296,6 +322,7 @@ function AdsTab({won}) {
 
     {report && <>
       {(!dateFrom || !dateTo) && <Alert type="gold">⚠️ בחר טווח תאריכים כדי לחשב ROI מול עסקאות שנסגרו ב-Pipedrive</Alert>}
+      {dateFrom && dateTo && matchedDeals.length===0 && <Alert type="gold">⚠️ לא נמצאו עסקאות שנסגרו בטווח שנבחר — בדוק את התאריכים</Alert>}
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
         <Kpi label="💸 הוצאות" value={fmtILS(report.totalCost)} delta="Google Ads"/>
         <Kpi label="👥 לידים" value={Math.round(report.totalConv)} color={T.teal} dc={T.teal}/>
