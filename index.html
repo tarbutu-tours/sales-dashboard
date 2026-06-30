@@ -438,13 +438,26 @@ function ProductsTab({products, codeMap}) {
   const [invFreeOnly,setInvFreeOnly] = useState(false);
   const [invTripCode,setInvTripCode] = useState("all");
   const [invRoomType,setInvRoomType] = useState("all");
+  const [colName,setColName]     = useState("");
+  const [colCode,setColCode]     = useState("");
+  const [colRoom,setColRoom]     = useState("");
+  const [colDateFrom,setColDateFrom] = useState("");
+  const [colDateTo,setColDateTo]     = useState("");
 
   const F_FREE  = "e3799fcad3543e1361f596e6ba63a4e93b05fb41";
   const F_USED  = "e72bd51506f19955a82bc8073b6478cf69e50bbb";
   const F_TOTAL = "8037c7753cb6e2aa2c8088c90f71139df06e6116";
+  const F_DEPARTURE = "cfe03801231d2fbc0afc5bde16025716fd240099"; // תאריך יציאה
 
   const roomColors={"פנימי":"#1A9AE0","חלון":"#1DB8A0","מרפסת":"#F0B429","דק עליון":"#7B68EE","דק אמצעי":"#F06292"};
   const getRoomColor=rt=>{for(const [k,v] of Object.entries(roomColors))if(rt&&rt.includes(k))return v;return"#888";};
+
+  const fmtDate = ds => {
+    if(!ds) return "–";
+    const d = new Date(ds);
+    if(isNaN(d)) return ds;
+    return d.toLocaleDateString("he-IL",{day:"2-digit",month:"2-digit",year:"numeric"});
+  };
 
   const parsed=products.map(p=>{
     const parts=(p.name||"").split("-");
@@ -454,7 +467,8 @@ function ProductsTab({products, codeMap}) {
     const free=Number(p[F_FREE])||Number(p.quantity_available)||0;
     const used=Number(p[F_USED])||Number(p.quantity_used)||0;
     const total=Number(p[F_TOTAL])||free+used;
-    return{...p,code,tripNum,roomType,tripName:codeMap[code]||"",free,used,total};
+    const departureDate=p[F_DEPARTURE]||"";
+    return{...p,code,tripNum,roomType,tripName:codeMap[code]||"",free,used,total,departureDate};
   });
 
   // רק 2026 – tripNum מכיל תאריך כמו "6627" = Jun 27 2026
@@ -475,12 +489,27 @@ function ProductsTab({products, codeMap}) {
     const matchFree=!invFreeOnly||p.free>0;
     const matchCode=invTripCode==="all"||p.code===invTripCode;
     const matchRoom=invRoomType==="all"||p.roomType===invRoomType;
-    return matchSearch&&matchFree&&matchCode&&matchRoom;
+    const matchColName=!colName||p.name.toLowerCase().includes(colName.toLowerCase());
+    const matchColCode=!colCode||p.code.toLowerCase().includes(colCode.toLowerCase());
+    const matchColRoom=!colRoom||p.roomType.toLowerCase().includes(colRoom.toLowerCase());
+    const matchColDateFrom=!colDateFrom||(p.departureDate&&p.departureDate>=colDateFrom);
+    const matchColDateTo=!colDateTo||(p.departureDate&&p.departureDate<=colDateTo);
+    return matchSearch&&matchFree&&matchCode&&matchRoom&&matchColName&&matchColCode&&matchColRoom&&matchColDateFrom&&matchColDateTo;
+  });
+
+  // מיון: תאריך יציאה הקרוב ביותר קודם (ללא תאריך – בסוף הרשימה)
+  filtered.sort((a,b)=>{
+    if(!a.departureDate && !b.departureDate) return 0;
+    if(!a.departureDate) return 1;
+    if(!b.departureDate) return -1;
+    return new Date(a.departureDate) - new Date(b.departureDate);
   });
 
   const totalFree=parsed2026.reduce((s,p)=>s+p.free,0);
   const totalUsed=parsed2026.reduce((s,p)=>s+p.used,0);
   const trips=[...new Set(parsed2026.map(p=>p.tripNum))].length;
+
+  const colInputStyle={width:"100%",background:T.navy,border:"1px solid "+T.border,color:"#F0F4F8",fontSize:10,padding:"3px 6px",borderRadius:4,direction:"rtl"};
 
   return <div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
@@ -510,9 +539,25 @@ function ProductsTab({products, codeMap}) {
     <div style={{fontSize:11,color:T.muted,marginBottom:8}}>{filtered.length} מוצרים מוצגים</div>
     <div style={{overflowX:"auto"}}>
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-        <thead><tr>{["שם מוצר","קוד","סוג חדר","תאריך","פנויים","תפוסים","סה״כ"].map(h=>
-          <th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"6px 8px",borderBottom:"1px solid "+T.border,fontSize:10,textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>
-        )}</tr></thead>
+        <thead>
+          <tr>{["שם מוצר","קוד","סוג חדר","תאריך יציאה","פנויים","תפוסים","סה״כ"].map(h=>
+            <th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"6px 8px 4px",borderBottom:"1px solid "+T.border,fontSize:10,textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>
+          )}</tr>
+          <tr>
+            <th style={{padding:"0 8px 8px",borderBottom:"1px solid "+T.border}}><input value={colName} onChange={e=>setColName(e.target.value)} placeholder="סנן..." style={colInputStyle}/></th>
+            <th style={{padding:"0 8px 8px",borderBottom:"1px solid "+T.border}}><input value={colCode} onChange={e=>setColCode(e.target.value)} placeholder="סנן..." style={colInputStyle}/></th>
+            <th style={{padding:"0 8px 8px",borderBottom:"1px solid "+T.border}}><input value={colRoom} onChange={e=>setColRoom(e.target.value)} placeholder="סנן..." style={colInputStyle}/></th>
+            <th style={{padding:"0 8px 8px",borderBottom:"1px solid "+T.border}}>
+              <div style={{display:"flex",gap:3}}>
+                <input type="date" value={colDateFrom} onChange={e=>setColDateFrom(e.target.value)} style={{...colInputStyle,fontSize:9,padding:"3px 2px"}}/>
+                <input type="date" value={colDateTo} onChange={e=>setColDateTo(e.target.value)} style={{...colInputStyle,fontSize:9,padding:"3px 2px"}}/>
+              </div>
+            </th>
+            <th style={{padding:"0 8px 8px",borderBottom:"1px solid "+T.border}}></th>
+            <th style={{padding:"0 8px 8px",borderBottom:"1px solid "+T.border}}></th>
+            <th style={{padding:"0 8px 8px",borderBottom:"1px solid "+T.border}}></th>
+          </tr>
+        </thead>
         <tbody>{filtered.map(p=>{
           const col=getRoomColor(p.roomType);
           return <tr key={p.id} style={{borderBottom:"1px solid "+T.border}}>
@@ -522,7 +567,7 @@ function ProductsTab({products, codeMap}) {
               {p.tripName&&<div style={{fontSize:10,color:T.muted}}>{p.tripName}</div>}
             </td>
             <td style={{padding:"8px"}}><span style={{fontSize:10,padding:"2px 8px",borderRadius:10,background:col+"22",color:col,fontWeight:600}}>{p.roomType||"–"}</span></td>
-            <td style={{padding:"8px",fontSize:11,color:T.muted,whiteSpace:"nowrap"}}>{p.tripNum||"–"}</td>
+            <td style={{padding:"8px",fontSize:11,color:T.muted,whiteSpace:"nowrap"}}>{fmtDate(p.departureDate)}</td>
             <td style={{padding:"8px"}}><span style={{fontSize:13,fontWeight:700,color:p.free>0?T.teal:T.red}}>{p.free}</span></td>
             <td style={{padding:"8px",color:T.muted}}>{p.used}</td>
             <td style={{padding:"8px"}}>
