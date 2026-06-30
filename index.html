@@ -184,7 +184,7 @@ function AgentStats({open, won, um}) {
     if(!stats[uid]) stats[uid]={name,open:0,won:0,wonVal:0};
     stats[uid].open++;
   });
-  // עסקאות שנסגרו
+  // עסקאות שנסגרו בטווח שנבחר
   won.forEach(d=>{
     const uid=d.user_id?.id||d.user_id;
     const name=um[uid]||"";
@@ -486,7 +486,7 @@ function App() {
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
               <div style={card}>
                 <div style={ct}>נציגים – פתוחות וסגירות</div>
-                <AgentStats open={open} won={won} um={um}/>
+                <AgentStats open={open} won={recW} um={um}/>
               </div>
               <div style={card}>
                 <div style={ct}>נסגרו לאחרונה</div>
