@@ -471,14 +471,9 @@ function ProductsTab({products, codeMap}) {
     return{...p,code,tripNum,roomType,tripName:codeMap[code]||"",free,used,total,departureDate};
   });
 
-  // רק 2026 – tripNum מכיל תאריך כמו "6627" = Jun 27 2026
-  // הפורמט: MMDD לאחר שנה 26 = 2026
-  const parsed2026 = parsed.filter(p => {
-    if(!p.tripNum || p.tripNum.length < 4) return false;
-    // tripNum כמו "6627" = month 6, day 27, year 2026
-    // נניח שכל מה שיש כרגע זה 2026
-    return true; // מציג את הכל כי כולם 2026
-  });
+  // רק טיולים עם תאריך יציאה מ-1/1/2026 ואילך (מוצרים בלי תאריך יציאה לא מוצגים)
+  const MIN_DATE = "2026-01-01";
+  const parsed2026 = parsed.filter(p => p.departureDate && p.departureDate >= MIN_DATE);
 
   const allCodes=[...new Set(parsed2026.map(p=>p.code))].sort();
   const allRoomTypes=[...new Set(parsed2026.map(p=>p.roomType).filter(Boolean))].sort();
