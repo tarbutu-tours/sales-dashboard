@@ -207,10 +207,12 @@ function Donut({calls, ib, ob, ms, dur, rate, ok}) {
 
 function AdsTab({won}) {
   const [report, setReport] = useState(null);
+  const [prevReport, setPrevReport] = useState(null);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [err, setErr] = useState("");
   const [fileName, setFileName] = useState("");
+  const [prevFileName, setPrevFileName] = useState("");
   const [uploadedAt, setUploadedAt] = useState("");
 
   useEffect(() => {
@@ -224,15 +226,19 @@ function AdsTab({won}) {
         setFileName(j.fileName || "");
         setUploadedAt(j.uploadedAt || "");
       }
+      const savedPrev = localStorage.getItem("ads_report_prev");
+      if (savedPrev) {
+        const j = JSON.parse(savedPrev);
+        setPrevReport(j.report);
+        setPrevFileName(j.fileName || "");
+      }
     } catch(e) {}
   }, []);
 
   function saveState(r, f, t, fn) {
     const uploaded = new Date().toLocaleString("he-IL");
     setReport(r); setDateFrom(f); setDateTo(t); setFileName(fn); setUploadedAt(uploaded);
-    try {
-      localStorage.setItem("ads_report", JSON.stringify({report:r, dateFrom:f, dateTo:t, fileName:fn, uploadedAt:uploaded}));
-    } catch(e) {}
+    try { localStorage.setItem("ads_report", JSON.stringify({report:r, dateFrom:f, dateTo:t, fileName:fn, uploadedAt:uploaded})); } catch(e) {}
   }
 
   function handleFile(e) {
@@ -241,14 +247,25 @@ function AdsTab({won}) {
     setErr("");
     const reader = new FileReader();
     reader.onload = (ev) => {
-      try {
-        const parsed = parseGoogleAdsCSV(ev.target.result);
-        saveState(parsed, dateFrom, dateTo, file.name);
-      } catch(ex) {
-        setErr(ex.message || "שגיאה בקריאת הקובץ");
-      }
+      try { const parsed = parseGoogleAdsCSV(ev.target.result); saveState(parsed, dateFrom, dateTo, file.name); }
+      catch(ex) { setErr(ex.message || "שגיאה בקריאת הקובץ"); }
     };
     reader.onerror = () => setErr("שגיאה בקריאת הקובץ");
+    reader.readAsText(file, "UTF-8");
+    e.target.value = "";
+  }
+
+  function handlePrevFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const parsed = parseGoogleAdsCSV(ev.target.result);
+        setPrevReport(parsed); setPrevFileName(file.name);
+        try { localStorage.setItem("ads_report_prev", JSON.stringify({report:parsed, fileName:file.name})); } catch(e) {}
+      } catch(ex) { setErr(ex.message || "שגיאה בקריאת קובץ השוואה"); }
+    };
     reader.readAsText(file, "UTF-8");
     e.target.value = "";
   }
@@ -258,83 +275,123 @@ function AdsTab({won}) {
     try { localStorage.removeItem("ads_report"); } catch(e) {}
   }
 
-  function toISODate(d) {
-    return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+  function clearPrevReport() {
+    setPrevReport(null); setPrevFileName("");
+    try { localStorage.removeItem("ads_report_prev"); } catch(e) {}
   }
 
-  function setRange(type) {
-    const today = new Date();
-    let from, to;
-    if (type === "today") { from = to = today; }
-    else if (type === "yesterday") { from = to = new Date(today.getTime()-86400000); }
-    else if (type === "7d") { from = new Date(today.getTime()-6*86400000); to = today; }
-    else if (type === "month") { from = new Date(today.getFullYear(), today.getMonth(), 1); to = today; }
-    else if (type === "quarter") { const qm = Math.floor(today.getMonth()/3)*3; from = new Date(today.getFullYear(), qm, 1); to = today; }
-    const f = toISODate(from), t = toISODate(to);
-    setDateFrom(f); setDateTo(t);
-    saveState(report, f, t, fileName);
-  }
-
-  // הכנסה מעסקאות שנסגרו בטווח התאריכים שנבחר ידנית
+  // עסקאות שנסגרו בטווח
   const matchedDeals = (() => {
     if (!dateFrom || !dateTo || !won) return [];
-    return won.filter(x => x.won_time && x.won_time.substring(0,10) >= dateFrom && x.won_time.substring(0,10) <= dateTo);
+    const lo = dateFrom <= dateTo ? dateFrom : dateTo;
+    const hi = dateFrom <= dateTo ? dateTo : dateFrom;
+    return won.filter(x => x.won_time && x.won_time.substring(0,10) >= lo && x.won_time.substring(0,10) <= hi);
   })();
-  const revenue = matchedDeals.reduce((s,x) => s + (Number(x.value)||0) * ILS_TO_USD, 0); // x.value הוא בדולרים; ממירים לשקלים לצורך השוואה עקבית מול ההוצאה
 
+  const revenue = matchedDeals.reduce((s,x) => s + (Number(x.value)||0) * ILS_TO_USD, 0);
   const cpl = report && report.totalConv > 0 ? report.totalCost / report.totalConv : 0;
   const roi = report && report.totalCost > 0 && revenue > 0 ? revenue / report.totalCost : null;
+  const costPerWon = report && matchedDeals.length > 0 ? report.totalCost / matchedDeals.length : null;
+  const convRate = report && report.totalConv > 0 && matchedDeals.length > 0 ? (matchedDeals.length / report.totalConv * 100) : null;
+
+  // השוואה לחודש קודם
+  const prevCpl = prevReport && prevReport.totalConv > 0 ? prevReport.totalCost / prevReport.totalConv : null;
+  const pctChange = (curr, prev) => prev && prev > 0 ? ((curr - prev) / prev * 100).toFixed(1) : null;
+  const arrow = (curr, prev, lowerIsBetter=true) => {
+    if(!prev) return null;
+    const better = lowerIsBetter ? curr < prev : curr > prev;
+    return <span style={{fontSize:10,color:better?T.teal:T.red,marginRight:4}}>{curr<prev?"▼":"▲"} {Math.abs(pctChange(curr,prev))}%</span>;
+  };
 
   const inputStyle = {background:T.navyCard,border:"1px solid "+T.border,color:"#F0F4F8",fontSize:12,padding:"6px 10px",borderRadius:6};
-  const rangeBtnStyle = {...inputStyle,cursor:"pointer"};
 
   return <div>
     <div style={{...card,marginBottom:12}}>
-      <div style={ct}>העלאת דוח Google Ads</div>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:10}}>
-        <label style={{...inputStyle,cursor:"pointer",background:T.teal,color:"#06251f",fontWeight:600,border:"none"}}>
-          📁 בחר קובץ CSV
-          <input type="file" accept=".csv" onChange={handleFile} style={{display:"none"}}/>
-        </label>
-        {fileName && <span style={{fontSize:11,color:T.muted}}>{fileName}</span>}
-        {report && <button onClick={clearReport} style={{...inputStyle,cursor:"pointer",color:T.red}}>🗑 נקה</button>}
+      <div style={ct}>העלאת דוחות Google Ads</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div>
+          <div style={{fontSize:11,color:T.muted,marginBottom:6}}>📄 דוח נוכחי</div>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <label style={{...inputStyle,cursor:"pointer",background:T.teal,color:"#06251f",fontWeight:600,border:"none"}}>
+              📁 בחר קובץ CSV
+              <input type="file" accept=".csv" onChange={handleFile} style={{display:"none"}}/>
+            </label>
+            {fileName && <span style={{fontSize:11,color:T.muted}}>{fileName}</span>}
+            {report && <button onClick={clearReport} style={{...inputStyle,cursor:"pointer",color:T.red}}>🗑</button>}
+          </div>
+        </div>
+        <div>
+          <div style={{fontSize:11,color:T.muted,marginBottom:6}}>📄 דוח השוואה (חודש קודם)</div>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <label style={{...inputStyle,cursor:"pointer",background:T.navyMid,color:T.muted,fontWeight:600}}>
+              📁 בחר קובץ CSV
+              <input type="file" accept=".csv" onChange={handlePrevFile} style={{display:"none"}}/>
+            </label>
+            {prevFileName && <span style={{fontSize:11,color:T.muted}}>{prevFileName}</span>}
+            {prevReport && <button onClick={clearPrevReport} style={{...inputStyle,cursor:"pointer",color:T.red}}>🗑</button>}
+          </div>
+        </div>
       </div>
 
-      <div style={{fontSize:11,color:T.muted,marginBottom:6}}>תקופת ההשוואה (לחישוב ROI מול עסקאות שנסגרו ב-Pipedrive):</div>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-        <input type="date" value={dateFrom} onChange={e=>{const v=e.target.value; setDateFrom(v); saveState(report,v,dateTo,fileName);}} style={inputStyle}/>
-        <span style={{fontSize:11,color:T.muted}}>עד</span>
-        <input type="date" value={dateTo} onChange={e=>{const v=e.target.value; setDateTo(v); saveState(report,dateFrom,v,fileName);}} style={inputStyle}/>
-        {dateFrom && dateTo && <span style={{fontSize:11,color:T.muted}}>נמצאו {matchedDeals.length} עסקאות שנסגרו בטווח זה</span>}
+      <div style={{marginTop:12}}>
+        <div style={{fontSize:11,color:T.muted,marginBottom:6}}>תקופת ההשוואה מול Pipedrive (לחישוב ROI / עלות לסגירה):</div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          <input type="date" value={dateFrom} onChange={e=>{const v=e.target.value; setDateFrom(v); saveState(report,v,dateTo,fileName);}} style={inputStyle}/>
+          <span style={{fontSize:11,color:T.muted}}>עד</span>
+          <input type="date" value={dateTo} onChange={e=>{const v=e.target.value; setDateTo(v); saveState(report,dateFrom,v,fileName);}} style={inputStyle}/>
+          {dateFrom && dateTo && <span style={{fontSize:11,color:matchedDeals.length>0?T.teal:T.muted}}>נמצאו {matchedDeals.length} עסקאות שנסגרו</span>}
+        </div>
       </div>
       {err && <div style={{marginTop:8}}><Alert type="red">⚠️ {err}</Alert></div>}
       {uploadedAt && <div style={{fontSize:10,color:T.muted,marginTop:8}}>עודכן לאחרונה: {uploadedAt}</div>}
     </div>
 
-    {!report && <Alert type="gold">📊 טרם הועלה דוח. העלה קובץ CSV של "Campaigns" שהורד מ-Google Ads (Overview → Download).</Alert>}
-    {report && <Alert type="gold">💡 הוצאות/לידים/CPL מגיעים מהקובץ שהועלה — ודא שהטווח שנבחר תואם לתקופת הקובץ.</Alert>}
+    {!report && <Alert type="gold">📊 טרם הועלה דוח. העלה קובץ CSV של "Campaigns" שהורד מ-Google Ads.</Alert>}
 
     {report && <>
-      {(!dateFrom || !dateTo) && <Alert type="gold">⚠️ בחר טווח תאריכים כדי לחשב ROI מול עסקאות שנסגרו ב-Pipedrive</Alert>}
-      {dateFrom && dateTo && matchedDeals.length===0 && <Alert type="gold">⚠️ לא נמצאו עסקאות שנסגרו בטווח שנבחר — בדוק את התאריכים</Alert>}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
-        <Kpi label="💸 הוצאות" value={fmtILS(report.totalCost)} delta="Google Ads"/>
-        <Kpi label="👥 לידים" value={Math.round(report.totalConv)} color={T.teal} dc={T.teal}/>
-        <Kpi label="💰 CPL" value={fmtILS(cpl)} delta="עלות לליד"/>
-        <Kpi label="✅ ROI" value={roi!==null ? roi.toFixed(1)+"x" : "—"} color={T.gold} dc={T.gold} delta={roi!==null?undefined:"בחר תאריכים"}/>
+      {dateFrom && dateTo && matchedDeals.length===0 && <Alert type="gold">⚠️ לא נמצאו עסקאות שנסגרו בטווח שנבחר</Alert>}
+
+      {/* KPIs ראשיים */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:10}}>
+        <Kpi label="💸 הוצאות" value={fmtILS(report.totalCost)} delta={prevReport?<>{arrow(report.totalCost,prevReport.totalCost)} לעומת חודש קודם</>:undefined}/>
+        <Kpi label="👥 לידים" value={Math.round(report.totalConv)} color={T.teal} delta={prevReport?<>{arrow(report.totalConv,prevReport.totalConv,false)} לעומת חודש קודם</>:undefined}/>
+        <Kpi label="💰 CPL" value={fmtILS(cpl)} delta={prevReport&&prevCpl?<>{arrow(cpl,prevCpl)} לעומת חודש קודם</>:undefined}/>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:10}}>
+        <Kpi label="✅ ROI" value={roi!==null?roi.toFixed(1)+"x":"—"} color={T.gold} dc={T.gold} delta={roi===null?"בחר תאריכים":undefined}/>
+        <Kpi label="🎯 עלות לסגירה" value={costPerWon?fmtILS(costPerWon):"—"} color={T.teal} delta={costPerWon?undefined:"בחר תאריכים"}/>
+        <Kpi label="📈 אחוז המרה" value={convRate?convRate.toFixed(1)+"%":"—"} color={convRate&&convRate>5?T.teal:T.gold} delta={convRate?"מליד לסגירה":undefined}/>
       </div>
 
-      {report.campaigns && report.campaigns.length > 0 && <div style={{...card,marginTop:12}}>
+      {/* פירוט קמפיינים עם CPL */}
+      {report.campaigns && report.campaigns.length > 0 && <div style={{...card,marginTop:10}}>
         <div style={ct}>פירוט קמפיינים</div>
-        {report.campaigns.sort((a,b)=>b.cost-a.cost).map((c,i) =>
-          <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid "+T.border}}>
-            <span style={{fontSize:12,color:"#F0F4F8"}}>{c.name}</span>
-            <div style={{display:"flex",gap:14,fontSize:12}}>
-              <span style={{color:T.muted}}>{Math.round(c.conv)} לידים</span>
-              <span style={{color:T.gold,fontWeight:600}}>{fmtILS(c.cost)}</span>
-            </div>
-          </div>
-        )}
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+          <thead><tr>
+            {["קמפיין","הוצאות","לידים","CPL","% מסה״כ"].map(h=>
+              <th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"4px 8px 8px",borderBottom:"1px solid "+T.border,fontSize:10}}>{h}</th>
+            )}
+          </tr></thead>
+          <tbody>{report.campaigns.sort((a,b)=>b.cost-a.cost).map((c,i)=>{
+            const campCpl = c.conv > 0 ? c.cost / c.conv : 0;
+            const pct = report.totalCost > 0 ? Math.round(c.cost / report.totalCost * 100) : 0;
+            const campCplColor = campCpl > 0 && cpl > 0 ? (campCpl <= cpl ? T.teal : T.red) : T.muted;
+            return <tr key={i} style={{borderBottom:"1px solid "+T.border}}>
+              <td style={{padding:"7px 8px",fontSize:11,color:"#F0F4F8"}}>{c.name}</td>
+              <td style={{padding:"7px 8px",color:T.gold,fontWeight:600}}>{fmtILS(c.cost)}</td>
+              <td style={{padding:"7px 8px",color:T.teal}}>{Math.round(c.conv)}</td>
+              <td style={{padding:"7px 8px",fontWeight:600,color:campCplColor}}>{campCpl>0?fmtILS(campCpl):"–"}</td>
+              <td style={{padding:"7px 8px"}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <div style={{flex:1,height:5,background:"rgba(255,255,255,.06)",borderRadius:3,overflow:"hidden",minWidth:40}}>
+                    <div style={{width:pct+"%",height:5,background:T.gold,borderRadius:3}}/>
+                  </div>
+                  <span style={{fontSize:10,color:T.muted,minWidth:28}}>{pct}%</span>
+                </div>
+              </td>
+            </tr>;
+          })}</tbody>
+        </table>
       </div>}
     </>}
   </div>;
