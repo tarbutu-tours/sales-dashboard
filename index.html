@@ -398,37 +398,79 @@ function AdsTab({won}) {
 }
 
 function LeadsTable({open, sm, um, filterAgent, filterStage}) {
+  const [colTitle, setColTitle] = useState("");
+  const [colSource, setColSource] = useState("");
+  const [colTrip, setColTrip] = useState("");
+  const [colStage, setColStage] = useState("");
+  const [colAgent, setColAgent] = useState("");
+  const [colStatus, setColStatus] = useState("all");
+
+  const colInputStyle={width:"100%",background:"rgba(0,0,0,.2)",border:"1px solid "+T.border,color:"#F0F4F8",fontSize:10,padding:"3px 6px",borderRadius:4,direction:"rtl"};
+
   const rows = open
     .filter(d=>filterAgent==="all"||(String(d.user_id?.id||d.user_id))===filterAgent)
     .filter(d=>filterStage==="all"||String(d.stage_id)===filterStage)
-    .map(d=>{
-      return {...d,_d:daysIn(d),_tripCode:d[F_TOUR_CODE]||""};
+    .map(d=>({...d,_d:daysIn(d),_tripCode:d[F_TOUR_CODE]||"",_source:SOURCE_OPTIONS[String(d[F_SOURCE])]||d[F_SOURCE]||"–",_agent:(um[d.user_id?.id||d.user_id]||"–").split(" ")[0]}))
+    .filter(d=>!colTitle||d.title?.toLowerCase().includes(colTitle.toLowerCase()))
+    .filter(d=>!colSource||d._source?.toLowerCase().includes(colSource.toLowerCase()))
+    .filter(d=>!colTrip||d._tripCode?.toLowerCase().includes(colTrip.toLowerCase()))
+    .filter(d=>!colStage||(sm[d.stage_id]||"").toLowerCase().includes(colStage.toLowerCase()))
+    .filter(d=>!colAgent||d._agent?.toLowerCase().includes(colAgent.toLowerCase()))
+    .filter(d=>{
+      if(colStatus==="all") return true;
+      if(colStatus==="stuck") return d._d>14;
+      if(colStatus==="waiting") return d._d>7&&d._d<=14;
+      if(colStatus==="active") return d._d<=7;
+      return true;
     })
     .sort((a,b)=>b._d-a._d);
-  if(!rows.length) return <div style={{color:T.muted,fontSize:12,textAlign:"center",padding:"1.5rem"}}>אין עסקאות</div>;
+
+  if(!open.length) return <div style={{color:T.muted,fontSize:12,textAlign:"center",padding:"1.5rem"}}>אין עסקאות</div>;
+
   return <div style={{overflowX:"auto"}}>
     <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,tableLayout:"fixed"}}>
       <colgroup><col width="22%"/><col width="13%"/><col width="13%"/><col width="14%"/><col width="9%"/><col width="6%"/><col width="9%"/><col width="14%"/></colgroup>
-      <thead><tr>{["שם עסקה","מקור הגעה","קוד טיול","שלב","ערך","ימים","נציג","סטטוס"].map(h=>
-        <th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"4px 6px 8px",borderBottom:"1px solid "+T.border,fontSize:10,textTransform:"uppercase"}}>{h}</th>
-      )}</tr></thead>
-      <tbody>{rows.map(d=>{
-        const di=d._d;
-        const [bl,bbg,bc]=di>14?[`תקוע ${di}י'`,"rgba(232,72,85,.15)","#F0827A"]:di>7?[`ממתין ${di}י'`,"rgba(240,180,41,.15)",T.gold]:["פעיל","rgba(29,184,160,.15)",T.teal];
-        const un=(um[d.user_id?.id||d.user_id]||"–").split(" ")[0];
-        const source=SOURCE_OPTIONS[String(d[F_SOURCE])]||d[F_SOURCE]||"–";
-        return <tr key={d.id} style={{borderBottom:"1px solid "+T.border}}>
-          <td style={{padding:"8px 6px",fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(d.title||"").substring(0,22)}</td>
-          <td style={{padding:"8px 6px",color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{String(source).substring(0,12)}</td>
-          <td style={{padding:"8px 6px"}}>{d._tripCode?<span style={{fontSize:10,padding:"2px 7px",borderRadius:10,background:"rgba(123,104,238,.1)",color:"#9B8FFF"}}>{d._tripCode}</span>:"–"}</td>
-          <td style={{padding:"8px 6px"}}><span style={{fontSize:10,padding:"2px 7px",borderRadius:10,background:"rgba(29,184,160,.1)",color:T.teal}}>{(sm[d.stage_id]||"–").substring(0,12)}</span></td>
-          <td style={{padding:"8px 6px",color:T.teal,fontWeight:600}}>{fmt(d.value)}</td>
-          <td style={{padding:"8px 6px",color:di>7?T.gold:T.muted}}>{di}</td>
-          <td style={{padding:"8px 6px",color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{un}</td>
-          <td style={{padding:"8px 6px"}}><span style={{fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:20,background:bbg,color:bc}}>{bl}</span></td>
-        </tr>;
-      })}</tbody>
+      <thead>
+        <tr>{["שם עסקה","מקור הגעה","קוד טיול","שלב","ערך","ימים","נציג","סטטוס"].map(h=>
+          <th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"4px 6px 6px",borderBottom:"none",fontSize:10,textTransform:"uppercase"}}>{h}</th>
+        )}</tr>
+        <tr>
+          <th style={{padding:"0 6px 8px",borderBottom:"1px solid "+T.border}}><input value={colTitle} onChange={e=>setColTitle(e.target.value)} placeholder="סנן..." style={colInputStyle}/></th>
+          <th style={{padding:"0 6px 8px",borderBottom:"1px solid "+T.border}}><input value={colSource} onChange={e=>setColSource(e.target.value)} placeholder="סנן..." style={colInputStyle}/></th>
+          <th style={{padding:"0 6px 8px",borderBottom:"1px solid "+T.border}}><input value={colTrip} onChange={e=>setColTrip(e.target.value)} placeholder="סנן..." style={colInputStyle}/></th>
+          <th style={{padding:"0 6px 8px",borderBottom:"1px solid "+T.border}}><input value={colStage} onChange={e=>setColStage(e.target.value)} placeholder="סנן..." style={colInputStyle}/></th>
+          <th style={{padding:"0 6px 8px",borderBottom:"1px solid "+T.border}}></th>
+          <th style={{padding:"0 6px 8px",borderBottom:"1px solid "+T.border}}></th>
+          <th style={{padding:"0 6px 8px",borderBottom:"1px solid "+T.border}}><input value={colAgent} onChange={e=>setColAgent(e.target.value)} placeholder="סנן..." style={colInputStyle}/></th>
+          <th style={{padding:"0 6px 8px",borderBottom:"1px solid "+T.border}}>
+            <select value={colStatus} onChange={e=>setColStatus(e.target.value)} style={{...colInputStyle,cursor:"pointer"}}>
+              <option value="all">הכל</option>
+              <option value="active">פעיל</option>
+              <option value="waiting">ממתין</option>
+              <option value="stuck">תקוע</option>
+            </select>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.length===0&&<tr><td colSpan={8} style={{padding:"1.5rem",textAlign:"center",color:T.muted,fontSize:12}}>אין תוצאות</td></tr>}
+        {rows.map(d=>{
+          const di=d._d;
+          const [bl,bbg,bc]=di>14?[`תקוע ${di}י'`,"rgba(232,72,85,.15)","#F0827A"]:di>7?[`ממתין ${di}י'`,"rgba(240,180,41,.15)",T.gold]:["פעיל","rgba(29,184,160,.15)",T.teal];
+          return <tr key={d.id} style={{borderBottom:"1px solid "+T.border}}>
+            <td style={{padding:"8px 6px",fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(d.title||"").substring(0,22)}</td>
+            <td style={{padding:"8px 6px",color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{String(d._source).substring(0,12)}</td>
+            <td style={{padding:"8px 6px"}}>{d._tripCode?<span style={{fontSize:10,padding:"2px 7px",borderRadius:10,background:"rgba(123,104,238,.1)",color:"#9B8FFF"}}>{d._tripCode}</span>:"–"}</td>
+            <td style={{padding:"8px 6px"}}><span style={{fontSize:10,padding:"2px 7px",borderRadius:10,background:"rgba(29,184,160,.1)",color:T.teal}}>{(sm[d.stage_id]||"–").substring(0,12)}</span></td>
+            <td style={{padding:"8px 6px",color:T.teal,fontWeight:600}}>{fmt(d.value)}</td>
+            <td style={{padding:"8px 6px",color:di>7?T.gold:T.muted}}>{di}</td>
+            <td style={{padding:"8px 6px",color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d._agent}</td>
+            <td style={{padding:"8px 6px"}}><span style={{fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:20,background:bbg,color:bc}}>{bl}</span></td>
+          </tr>;
+        })}
+      </tbody>
     </table>
+    <div style={{fontSize:11,color:T.muted,marginTop:8}}>{rows.length} עסקאות מוצגות מתוך {open.length}</div>
   </div>;
 }
 
