@@ -95,6 +95,60 @@ function Kpi({label, value, delta, color, dc}) {
   </div>;
 }
 
+// פיענוח קובץ CSV של Google Ads (קובץ Campaigns)
+function parseGoogleAdsCSV(text) {
+  // הסרת BOM אם קיים
+  text = text.replace(/^\uFEFF/, "");
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (lines.length < 2) throw new Error("קובץ ריק או לא תקין");
+
+  // פיענוח CSV פשוט (תומך בפסיקים בתוך מרכאות)
+  function parseLine(line) {
+    const out = []; let cur = ""; let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') { inQ = !inQ; continue; }
+      if (c === "," && !inQ) { out.push(cur); cur = ""; continue; }
+      cur += c;
+    }
+    out.push(cur);
+    return out;
+  }
+
+  const header = parseLine(lines[0]).map(h => h.trim());
+  const idxCost = header.findIndex(h => h.toLowerCase().includes("cost") && !h.toLowerCase().includes("conv"));
+  const idxConv = header.findIndex(h => h.toLowerCase() === "conversions");
+  const idxName = header.findIndex(h => h.toLowerCase().includes("campaign name"));
+
+  if (idxCost === -1 || idxConv === -1) {
+    throw new Error("לא נמצאו עמודות Cost / Conversions בקובץ. ודא שזה קובץ Campaigns שהורד מ-Google Ads.");
+  }
+
+  let totalCost = 0, totalConv = 0;
+  const campaigns = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const cols = parseLine(lines[i]);
+    if (cols.length < header.length) continue;
+    const rawCost = (cols[idxCost] || "").replace(/[^\d.,-]/g, "").replace(",", "");
+    const rawConv = (cols[idxConv] || "").replace(/[^\d.,-]/g, "").replace(",", "");
+    const cost = parseFloat(rawCost) || 0;
+    const conv = parseFloat(rawConv) || 0;
+    totalCost += cost;
+    totalConv += conv;
+    if (idxName !== -1) campaigns.push({ name: cols[idxName], cost, conv });
+  }
+
+  return { totalCost, totalConv, campaigns };
+}
+
+function fmtILS(v) {
+  if (!v || isNaN(v)) return "₪0";
+  if (v >= 1000000) return "₪" + (v/1000000).toFixed(1) + "M";
+  if (v >= 1000) return "₪" + Math.round(v/1000) + "K";
+  return "₪" + Math.round(v).toLocaleString("he-IL");
+}
+
 function Alert({type, children}) {
   const s = type==="red"?{bg:"rgba(232,72,85,.1)",br:"rgba(232,72,85,.25)",c:"#F0827A"}:{bg:"rgba(240,180,41,.08)",br:"rgba(240,180,41,.25)",c:T.gold};
   return <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",borderRadius:8,fontSize:12,marginBottom:8,background:s.bg,border:"1px solid "+s.br,color:s.c}}>{children}</div>;
@@ -149,6 +203,120 @@ function Donut({calls, ib, ob, ms, dur, rate, ok}) {
       )}
     </div>
   </>;
+}
+
+function AdsTab({won}) {
+  const [report, setReport] = useState(null);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [err, setErr] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [uploadedAt, setUploadedAt] = useState("");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("ads_report");
+      if (saved) {
+        const j = JSON.parse(saved);
+        setReport(j.report);
+        setDateFrom(j.dateFrom || "");
+        setDateTo(j.dateTo || "");
+        setFileName(j.fileName || "");
+        setUploadedAt(j.uploadedAt || "");
+      }
+    } catch(e) {}
+  }, []);
+
+  function saveState(r, f, t, fn) {
+    const uploaded = new Date().toLocaleString("he-IL");
+    setReport(r); setDateFrom(f); setDateTo(t); setFileName(fn); setUploadedAt(uploaded);
+    try {
+      localStorage.setItem("ads_report", JSON.stringify({report:r, dateFrom:f, dateTo:t, fileName:fn, uploadedAt:uploaded}));
+    } catch(e) {}
+  }
+
+  function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setErr("");
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const parsed = parseGoogleAdsCSV(ev.target.result);
+        saveState(parsed, dateFrom, dateTo, file.name);
+      } catch(ex) {
+        setErr(ex.message || "שגיאה בקריאת הקובץ");
+      }
+    };
+    reader.onerror = () => setErr("שגיאה בקריאת הקובץ");
+    reader.readAsText(file, "UTF-8");
+    e.target.value = "";
+  }
+
+  function clearReport() {
+    setReport(null); setFileName(""); setUploadedAt("");
+    try { localStorage.removeItem("ads_report"); } catch(e) {}
+  }
+
+  // הכנסה מעסקאות שנסגרו בטווח התאריכים שנבחר ידנית
+  const revenue = (() => {
+    if (!dateFrom || !dateTo || !won) return 0;
+    return won
+      .filter(x => x.won_time && x.won_time.substring(0,10) >= dateFrom && x.won_time.substring(0,10) <= dateTo)
+      .reduce((s,x) => s + (Number(x.value)||0) * ILS_TO_USD, 0); // המרה חזרה לשקלים לצורך חישוב ROI עקבי
+  })();
+
+  const cpl = report && report.totalConv > 0 ? report.totalCost / report.totalConv : 0;
+  const roi = report && report.totalCost > 0 && revenue > 0 ? revenue / report.totalCost : null;
+
+  const inputStyle = {background:T.navyCard,border:"1px solid "+T.border,color:"#F0F4F8",fontSize:12,padding:"6px 10px",borderRadius:6};
+
+  return <div>
+    <div style={{...card,marginBottom:12}}>
+      <div style={ct}>העלאת דוח Google Ads</div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:8}}>
+        <label style={{...inputStyle,cursor:"pointer",background:T.teal,color:"#06251f",fontWeight:600,border:"none"}}>
+          📁 בחר קובץ CSV
+          <input type="file" accept=".csv" onChange={handleFile} style={{display:"none"}}/>
+        </label>
+        {fileName && <span style={{fontSize:11,color:T.muted}}>{fileName}</span>}
+        {report && <button onClick={clearReport} style={{...inputStyle,cursor:"pointer",color:T.red}}>🗑 נקה</button>}
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+        <span style={{fontSize:11,color:T.muted}}>תקופת ההשוואה (לחישוב ROI מול עסקאות שנסגרו):</span>
+        <input type="date" value={dateFrom} onChange={e=>{const v=e.target.value; setDateFrom(v); saveState(report,v,dateTo,fileName);}} style={inputStyle}/>
+        <span style={{fontSize:11,color:T.muted}}>עד</span>
+        <input type="date" value={dateTo} onChange={e=>{const v=e.target.value; setDateTo(v); saveState(report,dateFrom,v,fileName);}} style={inputStyle}/>
+      </div>
+      {err && <div style={{marginTop:8}}><Alert type="red">⚠️ {err}</Alert></div>}
+      {uploadedAt && <div style={{fontSize:10,color:T.muted,marginTop:8}}>עודכן לאחרונה: {uploadedAt}</div>}
+    </div>
+
+    {!report && <Alert type="gold">📊 טרם הועלה דוח. העלה קובץ CSV של "Campaigns" שהורד מ-Google Ads (Overview → Download).</Alert>}
+
+    {report && <>
+      {(!dateFrom || !dateTo) && <Alert type="gold">⚠️ בחר טווח תאריכים כדי לחשב ROI מול עסקאות שנסגרו ב-Pipedrive</Alert>}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+        <Kpi label="💸 הוצאות" value={fmtILS(report.totalCost)} delta="Google Ads"/>
+        <Kpi label="👥 לידים" value={Math.round(report.totalConv)} color={T.teal} dc={T.teal}/>
+        <Kpi label="💰 CPL" value={fmtILS(cpl)} delta="עלות לליד"/>
+        <Kpi label="✅ ROI" value={roi!==null ? roi.toFixed(1)+"x" : "—"} color={T.gold} dc={T.gold} delta={roi!==null?undefined:"בחר תאריכים"}/>
+      </div>
+
+      {report.campaigns && report.campaigns.length > 0 && <div style={{...card,marginTop:12}}>
+        <div style={ct}>פירוט קמפיינים</div>
+        {report.campaigns.sort((a,b)=>b.cost-a.cost).map((c,i) =>
+          <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid "+T.border}}>
+            <span style={{fontSize:12,color:"#F0F4F8"}}>{c.name}</span>
+            <div style={{display:"flex",gap:14,fontSize:12}}>
+              <span style={{color:T.muted}}>{Math.round(c.conv)} לידים</span>
+              <span style={{color:T.gold,fontWeight:600}}>{fmtILS(c.cost)}</span>
+            </div>
+          </div>
+        )}
+      </div>}
+    </>}
+  </div>;
 }
 
 function LeadsTable({open, sm, um, filterAgent, filterStage}) {
@@ -457,15 +625,7 @@ function App() {
 
         if(tab==="inventory") return <ProductsTab products={products} codeMap={codeMap}/>;
 
-        if(tab==="ads") return <div>
-          <Alert type="gold">📊 נתוני פרסום הם דמו</Alert>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
-            <Kpi label="💸 הוצאות" value="$4,757" delta="גוגל + פייסבוק"/>
-            <Kpi label="👥 לידים" value="91" color={T.teal} dc={T.teal}/>
-            <Kpi label="💰 CPL" value="$52" delta="עלות לליד"/>
-            <Kpi label="✅ ROI" value="3.2x" color={T.gold} dc={T.gold}/>
-          </div>
-        </div>;
+        if(tab==="ads") return <AdsTab won={won}/>;
 
         return <>
           {stuck>0&&<Alert type="red">⚠️ {stuck} עסקאות תקועות מעל 14 ימים</Alert>}
