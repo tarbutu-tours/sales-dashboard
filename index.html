@@ -45,7 +45,15 @@ const mmss = s => Math.floor(s/60)+":"+String(s%60).padStart(2,"0");
 // נציגים פעילים
 const ACTIVE_AGENTS = ["avi","rahelz","rahel"];
 const isActive = name => ACTIVE_AGENTS.some(n=>(name||"").toLowerCase().includes(n));
-const F_SOURCE = "51bd6afeb66710d8a4d6e1376dae8408c2988947"; // שדה מקור הגעה
+const F_SOURCE = "862b7d3afb751251d1d3dee296f39949da0ca889"; // מקור הגעה
+const F_TOUR_CODE = "758d1357e816852c2b03f531353ac79a0c4edd85"; // קוד טיול
+const SOURCE_OPTIONS = {
+  "168":"אייר קרדיט","123":"צוד קשר באתר","130":"פיד פייסבוק","124":"תלקל תרבותו",
+  "129":"תרבותו אדוורדס","125":"תרבותו אוורדס","136":"ניוזלטר תרבותו","137":"תרבותו אינסטגרם",
+  "138":"תרבותו אינטרנט","140":"הפנייה","139":"קמפיין פייסבוק תרבותו","143":"לא זוהה",
+  "144":"צוות","145":"לקוח חוזר","146":"סוכן נסיעות","147":"לא שייעת מקור הגעה",
+  "157":"דף נחיתה כללי","162":"תרבותו - הפניה","166":"תרבותו הט"
+};
 
 async function wfetch(url, hdrs) {
   const r = await fetch(WORKER+"?url="+encodeURIComponent(url), { headers:hdrs||{}, signal:AbortSignal.timeout(20000) });
@@ -148,9 +156,7 @@ function LeadsTable({open, sm, um, filterAgent, filterStage}) {
     .filter(d=>filterAgent==="all"||(String(d.user_id?.id||d.user_id))===filterAgent)
     .filter(d=>filterStage==="all"||String(d.stage_id)===filterStage)
     .map(d=>{
-      const parts=(d.title||"").split("-");
-      const tripCode=parts.length>1?parts[0].trim():"";
-      return {...d,_d:daysIn(d),_tripCode:tripCode};
+      return {...d,_d:daysIn(d),_tripCode:d[F_TOUR_CODE]||""};
     })
     .sort((a,b)=>b._d-a._d);
   if(!rows.length) return <div style={{color:T.muted,fontSize:12,textAlign:"center",padding:"1.5rem"}}>אין עסקאות</div>;
@@ -164,7 +170,7 @@ function LeadsTable({open, sm, um, filterAgent, filterStage}) {
         const di=d._d;
         const [bl,bbg,bc]=di>14?[`תקוע ${di}י'`,"rgba(232,72,85,.15)","#F0827A"]:di>7?[`ממתין ${di}י'`,"rgba(240,180,41,.15)",T.gold]:["פעיל","rgba(29,184,160,.15)",T.teal];
         const un=(um[d.user_id?.id||d.user_id]||"–").split(" ")[0];
-        const source=d[F_SOURCE]||"–";
+        const source=SOURCE_OPTIONS[String(d[F_SOURCE])]||d[F_SOURCE]||"–";
         return <tr key={d.id} style={{borderBottom:"1px solid "+T.border}}>
           <td style={{padding:"8px 6px",fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(d.title||"").substring(0,22)}</td>
           <td style={{padding:"8px 6px",color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{String(source).substring(0,12)}</td>
