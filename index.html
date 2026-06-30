@@ -301,13 +301,6 @@ function AdsTab({won}) {
       </div>
 
       <div style={{fontSize:11,color:T.muted,marginBottom:6}}>תקופת ההשוואה (לחישוב ROI מול עסקאות שנסגרו ב-Pipedrive):</div>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginBottom:8}}>
-        <button onClick={()=>setRange("today")} style={rangeBtnStyle}>היום</button>
-        <button onClick={()=>setRange("yesterday")} style={rangeBtnStyle}>אתמול</button>
-        <button onClick={()=>setRange("7d")} style={rangeBtnStyle}>7 ימים אחרונים</button>
-        <button onClick={()=>setRange("month")} style={rangeBtnStyle}>החודש</button>
-        <button onClick={()=>setRange("quarter")} style={rangeBtnStyle}>הרבעון</button>
-      </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
         <input type="date" value={dateFrom} onChange={e=>{const v=e.target.value; setDateFrom(v); saveState(report,v,dateTo,fileName);}} style={inputStyle}/>
         <span style={{fontSize:11,color:T.muted}}>עד</span>
@@ -619,7 +612,8 @@ function App() {
 
     const openDeals = await pdAll("/deals?status=all&filter_id=116295").catch(ex=>{e.push("Pipedrive פתוחות: "+ex.message);return[];});
     const wonDeals  = await pdAll("/deals?status=all&filter_id=116296").catch(ex=>{e.push("Pipedrive נסגרו: "+ex.message);return[];});
-    const deals = [...openDeals,...wonDeals];
+    const deduped = [...new Map([...openDeals,...wonDeals].map(d=>[d.id,d])).values()];
+    const deals = deduped;
 
     const [users,stages,products,callsRaw] = await Promise.all([
       pdAll("/users").catch(()=>[]),
@@ -871,9 +865,11 @@ function App() {
               <div style={card}>
                 <div style={ct}>נסגרו לאחרונה</div>
                 {won.sort((a,b)=>new Date(b.won_time||0)-new Date(a.won_time||0)).slice(0,5).map(x=>{
+                  const tripCode=x[F_TOUR_CODE]||"";
                   return <div key={x.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid "+T.border}}>
                     <div>
                       <div style={{fontSize:11,color:T.muted}}>{(x.title||"").substring(0,28)}</div>
+                      {tripCode&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:10,background:"rgba(123,104,238,.1)",color:"#9B8FFF",marginTop:2,display:"inline-block"}}>{tripCode}</span>}
                     </div>
                     <span style={{fontSize:12,fontWeight:600,color:T.teal}}>{fmt(x.value)}</span>
                   </div>;
