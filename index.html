@@ -205,7 +205,70 @@ function Donut({calls, ib, ob, ms, dur, rate, ok}) {
   </>;
 }
 
-function AdsTab({won}) {
+// Google Ads Customer ID
+const GADS_CUSTOMER_ID = "734-656-0254";
+
+async function fetchGoogleAdsData(fromStr, toStr) {
+  const query = `
+    SELECT
+      campaign.name,
+      campaign.status,
+      metrics.cost_micros,
+      metrics.conversions,
+      metrics.clicks,
+      metrics.impressions
+    FROM campaign
+    WHERE segments.date BETWEEN '${fromStr}' AND '${toStr}'
+      AND campaign.status != 'REMOVED'
+    ORDER BY metrics.cost_micros DESC
+  `;
+
+  const resp = await fetch(WORKER + "/gads", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ customerId: GADS_CUSTOMER_ID, query: query.trim() })
+  });
+
+  if (!resp.ok) throw new Error("Google Ads API error: " + resp.status);
+  const text = await resp.text();
+
+  // Google Ads searchStream מחזיר מערך של תוצאות
+  let totalCost = 0, totalConv = 0;
+  const campaigns = [];
+
+  try {
+    // searchStream מחזיר JSON lines
+    const lines = text.trim().split("\n").filter(l => l.trim());
+    for (const line of lines) {
+      const parsed = JSON.parse(line);
+      const results = parsed.results || [];
+      for (const row of results) {
+        const cost = (Number(row.metrics?.costMicros) || 0) / 1000000;
+        const conv = Number(row.metrics?.conversions) || 0;
+        totalCost += cost;
+        totalConv += conv;
+        if (row.campaign?.name) {
+          campaigns.push({ name: row.campaign.name, cost, conv });
+        }
+      }
+    }
+  } catch(e) {
+    // ניסיון פרסינג כ-JSON רגיל
+    const parsed = JSON.parse(text);
+    const results = parsed.results || [];
+    for (const row of results) {
+      const cost = (Number(row.metrics?.costMicros) || 0) / 1000000;
+      const conv = Number(row.metrics?.conversions) || 0;
+      totalCost += cost;
+      totalConv += conv;
+      if (row.campaign?.name) campaigns.push({ name: row.campaign.name, cost, conv });
+    }
+  }
+
+  return { totalCost, totalConv, campaigns };
+}
+
+function AdsTab({won, fromStr, toStr, label}) {
   const [report, setReport] = useState(null);
   const [prevReport, setPrevReport] = useState(null);
   const [dateFrom, setDateFrom] = useState("");
@@ -213,6 +276,8 @@ function AdsTab({won}) {
   const [err, setErr] = useState("");
   const [fileName, setFileName] = useState("");
   const [prevFileName, setPrevFileName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [autoMode, setAutoMode] = useState(true);
   const [uploadedAt, setUploadedAt] = useState("");
 
   useEffect(() => {
@@ -224,7 +289,6 @@ function AdsTab({won}) {
         setDateFrom(j.dateFrom || "");
         setDateTo(j.dateTo || "");
         setFileName(j.fileName || "");
-        setUploadedAt(j.uploadedAt || "");
       }
       const savedPrev = localStorage.getItem("ads_report_prev");
       if (savedPrev) {
@@ -234,6 +298,27 @@ function AdsTab({won}) {
       }
     } catch(e) {}
   }, []);
+
+  // שליפה אוטומטית כשמשתנה הטווח
+  useEffect(() => {
+    if (!autoMode || !fromStr || !toStr) return;
+    loadAuto();
+  }, [fromStr, toStr, autoMode]);
+
+  async function loadAuto() {
+    setLoading(true); setErr("");
+    try {
+      const data = await fetchGoogleAdsData(fromStr, toStr);
+      setReport(data);
+      setFileName(""); // מצב אוטומטי — אין שם קובץ
+      try { localStorage.setItem("ads_report", JSON.stringify({report:data, dateFrom:fromStr, dateTo:toStr, fileName:""})); } catch(e) {}
+    } catch(ex) {
+      setErr("שגיאה בשליפת נתוני Google Ads: " + ex.message);
+      setAutoMode(false); // עבור למצב ידני אם יש שגיאה
+    } finally {
+      setLoading(false);
+    }
+  }
 
   function saveState(r, f, t, fn) {
     const uploaded = new Date().toLocaleString("he-IL");
@@ -307,43 +392,58 @@ function AdsTab({won}) {
 
   return <div>
     <div style={{...card,marginBottom:12}}>
-      <div style={ct}>העלאת דוחות Google Ads</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-        <div>
-          <div style={{fontSize:11,color:T.muted,marginBottom:6}}>📄 דוח נוכחי</div>
-          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-            <label style={{...inputStyle,cursor:"pointer",background:T.teal,color:"#06251f",fontWeight:600,border:"none"}}>
-              📁 בחר קובץ CSV
-              <input type="file" accept=".csv" onChange={handleFile} style={{display:"none"}}/>
-            </label>
-            {fileName && <span style={{fontSize:11,color:T.muted}}>{fileName}</span>}
-            {report && <button onClick={clearReport} style={{...inputStyle,cursor:"pointer",color:T.red}}>🗑</button>}
-          </div>
-        </div>
-        <div>
-          <div style={{fontSize:11,color:T.muted,marginBottom:6}}>📄 דוח השוואה (חודש קודם)</div>
-          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-            <label style={{...inputStyle,cursor:"pointer",background:T.navyMid,color:T.muted,fontWeight:600}}>
-              📁 בחר קובץ CSV
-              <input type="file" accept=".csv" onChange={handlePrevFile} style={{display:"none"}}/>
-            </label>
-            {prevFileName && <span style={{fontSize:11,color:T.muted}}>{prevFileName}</span>}
-            {prevReport && <button onClick={clearPrevReport} style={{...inputStyle,cursor:"pointer",color:T.red}}>🗑</button>}
-          </div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <div style={ct}>נתוני Google Ads — {label||"טווח נבחר"}</div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {autoMode && <button onClick={loadAuto} disabled={loading}
+            style={{background:T.teal,color:"#06251f",fontWeight:600,fontSize:11,padding:"4px 12px",borderRadius:6,border:"none",cursor:"pointer"}}>
+            {loading?"⏳ טוען...":"↻ רענן"}
+          </button>}
+          <button onClick={()=>setAutoMode(!autoMode)}
+            style={{background:autoMode?"rgba(29,184,160,.1)":"rgba(255,255,255,.05)",color:autoMode?T.teal:T.muted,fontSize:11,padding:"4px 10px",borderRadius:6,border:"1px solid "+(autoMode?T.teal:T.border),cursor:"pointer"}}>
+            {autoMode?"🔄 אוטומטי":"📁 ידני"}
+          </button>
         </div>
       </div>
 
-      <div style={{marginTop:12}}>
-        <div style={{fontSize:11,color:T.muted,marginBottom:6}}>תקופת ההשוואה מול Pipedrive (לחישוב ROI / עלות לסגירה):</div>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-          <input type="date" value={dateFrom} onChange={e=>{const v=e.target.value; setDateFrom(v); saveState(report,v,dateTo,fileName);}} style={inputStyle}/>
-          <span style={{fontSize:11,color:T.muted}}>עד</span>
-          <input type="date" value={dateTo} onChange={e=>{const v=e.target.value; setDateTo(v); saveState(report,dateFrom,v,fileName);}} style={inputStyle}/>
-          {dateFrom && dateTo && <span style={{fontSize:11,color:matchedDeals.length>0?T.teal:T.muted}}>נמצאו {matchedDeals.length} עסקאות שנסגרו</span>}
+      {autoMode && loading && <Alert type="gold">⏳ שולף נתונים מ-Google Ads...</Alert>}
+      {autoMode && !loading && report && <div style={{fontSize:10,color:T.muted}}>נתונים לתקופה: {fromStr} עד {toStr}</div>}
+
+      {!autoMode && <div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:10}}>
+          <div>
+            <div style={{fontSize:11,color:T.muted,marginBottom:6}}>📄 דוח נוכחי</div>
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              <label style={{...inputStyle,cursor:"pointer",background:T.teal,color:"#06251f",fontWeight:600,border:"none"}}>
+                📁 בחר קובץ CSV
+                <input type="file" accept=".csv" onChange={handleFile} style={{display:"none"}}/>
+              </label>
+              {fileName && <span style={{fontSize:11,color:T.muted}}>{fileName}</span>}
+              {report && <button onClick={clearReport} style={{...inputStyle,cursor:"pointer",color:T.red}}>🗑</button>}
+            </div>
+          </div>
+          <div>
+            <div style={{fontSize:11,color:T.muted,marginBottom:6}}>📄 דוח השוואה (חודש קודם)</div>
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              <label style={{...inputStyle,cursor:"pointer",background:T.navyMid,color:T.muted,fontWeight:600}}>
+                📁 בחר קובץ CSV
+                <input type="file" accept=".csv" onChange={handlePrevFile} style={{display:"none"}}/>
+              </label>
+              {prevFileName && <span style={{fontSize:11,color:T.muted}}>{prevFileName}</span>}
+              {prevReport && <button onClick={clearPrevReport} style={{...inputStyle,cursor:"pointer",color:T.red}}>🗑</button>}
+            </div>
+          </div>
         </div>
-      </div>
+        <div style={{marginTop:8}}>
+          <div style={{fontSize:11,color:T.muted,marginBottom:6}}>תקופת ההשוואה מול Pipedrive:</div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+            <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={inputStyle}/>
+            <span style={{fontSize:11,color:T.muted}}>עד</span>
+            <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={inputStyle}/>
+          </div>
+        </div>
+      </div>}
       {err && <div style={{marginTop:8}}><Alert type="red">⚠️ {err}</Alert></div>}
-      {uploadedAt && <div style={{fontSize:10,color:T.muted,marginTop:8}}>עודכן לאחרונה: {uploadedAt}</div>}
     </div>
 
     {!report && <Alert type="gold">📊 טרם הועלה דוח. העלה קובץ CSV של "Campaigns" שהורד מ-Google Ads.</Alert>}
@@ -740,7 +840,7 @@ function App() {
     const dur = ans.length?Math.round(ans.reduce((s,c)=>s+(c.duration||0),0)/ans.length):0;
     const rate= calls.length?Math.round((calls.length-ms.length)/calls.length*100):0;
 
-    setData({open,won,newDeals,recW,pVal,sm,um,calls,acOK,ib,ob,ms,dur,rate,products,label});
+    setData({open,won,newDeals,recW,pVal,sm,um,calls,acOK,ib,ob,ms,dur,rate,products,label,fromStr,toStr});
     setErrs(e);
     setStatus("מחובר · "+new Date().toLocaleTimeString("he-IL"));
     setLoading(false);
@@ -791,7 +891,7 @@ function App() {
       {errs.map((e,i)=><Alert key={i} type="gold">⚠️ {e}</Alert>)}
 
       {data&&(()=>{
-        const {open,won,newDeals,recW,pVal,sm,um,calls,acOK,ib,ob,ms,dur,rate,products,label}=data;
+        const {open,won,newDeals,recW,pVal,sm,um,calls,acOK,ib,ob,ms,dur,rate,products,label,fromStr,toStr}=data;
         const stuck=open.filter(x=>daysIn(x)>14).length;
 
         if(tab==="inventory") return <ProductsTab products={products} codeMap={codeMap}/>;
@@ -922,7 +1022,7 @@ function App() {
           </div>;
         }
 
-        if(tab==="ads") return <AdsTab won={won}/>;
+        if(tab==="ads") return <AdsTab won={won} fromStr={fromStr} toStr={toStr} label={label}/>;
 
         return <>
           {stuck>0&&<Alert type="red">⚠️ {stuck} עסקאות תקועות מעל 14 ימים</Alert>}
