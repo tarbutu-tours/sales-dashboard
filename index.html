@@ -350,11 +350,13 @@ function AdsTab({won, fromStr, toStr, label}) {
     return won.filter(x => x.won_time && x.won_time.substring(0,10) >= lo && x.won_time.substring(0,10) <= hi);
   })();
 
+  // x.value מגיע מ-Pipedrive בדולרים — ממירים לשקלים להשוואה מול הוצאות Google Ads שגם בשקלים
   const revenue = matchedDeals.reduce((s,x) => s + (Number(x.value)||0) * ILS_TO_USD, 0);
   const cpl = report && report.totalConv > 0 ? report.totalCost / report.totalConv : 0;
   const roi = report && report.totalCost > 0 && revenue > 0 ? revenue / report.totalCost : null;
   const costPerWon = report && matchedDeals.length > 0 ? report.totalCost / matchedDeals.length : null;
-  const convRate = report && report.totalConv > 0 && matchedDeals.length > 0 ? (matchedDeals.length / report.totalConv * 100) : null;
+  // אחוז המרה: עסקאות שנסגרו מתוך לידים מגוגל (לא מ-Pipedrive כולו)
+  const convRate = report && report.totalConv > 0 && matchedDeals.length >= 0 ? (matchedDeals.length / report.totalConv * 100) : null;
 
   // השוואה לחודש קודם
   const prevCpl = prevReport && prevReport.totalConv > 0 ? prevReport.totalCost / prevReport.totalConv : null;
