@@ -205,65 +205,42 @@ function Donut({calls, ib, ob, ms, dur, rate, ok}) {
   </>;
 }
 
-// Google Ads Customer ID
-const GADS_CUSTOMER_ID = "734-656-0254";
+// Google Sheets CSV URLs
+const GADS_SUMMARY_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSAUdOBwDTSwcez-GnvaiQtwxN-Y4vgJmWjAM2Cr1TcigxA4eOtVxYrgsxEXgSksepgVLSZZLDIDTCD/pub?gid=1958096003&single=true&output=csv";
+const GADS_CAMPS_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSAUdOBwDTSwcez-GnvaiQtwxN-Y4vgJmWjAM2Cr1TcigxA4eOtVxYrgsxEXgSksepgVLSZZLDIDTCD/pub?gid=150483977&single=true&output=csv";
 
 async function fetchGoogleAdsData(fromStr, toStr) {
-  const query = `
-    SELECT
-      campaign.name,
-      campaign.status,
-      metrics.cost_micros,
-      metrics.conversions,
-      metrics.clicks,
-      metrics.impressions
-    FROM campaign
-    WHERE segments.date BETWEEN '${fromStr}' AND '${toStr}'
-      AND campaign.status != 'REMOVED'
-    ORDER BY metrics.cost_micros DESC
-  `;
-
-  const resp = await fetch(WORKER + "/gads", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ customerId: GADS_CUSTOMER_ID, query: query.trim() })
-  });
-
-  if (!resp.ok) throw new Error("Google Ads API error: " + resp.status);
-  const text = await resp.text();
-
-  // Google Ads searchStream מחזיר מערך של תוצאות
+  // שליפת Summary מ-Google Sheets
+  const summaryResp = await fetch(GADS_SUMMARY_CSV + "&t=" + Date.now());
+  const summaryText = await summaryResp.text();
+  
+  // פיענוח CSV של Summary
+  const lines = summaryText.trim().split("\n").map(l => l.split(",").map(c => c.replace(/^"|"$/g, "").trim()));
+  
   let totalCost = 0, totalConv = 0;
-  const campaigns = [];
+  for (const row of lines) {
+    if (row[0] && row[0].includes("הוצאות")) totalCost = parseFloat(row[1]) || 0;
+    if (row[0] && row[0].includes("לידים")) totalConv = parseFloat(row[1]) || 0;
+  }
 
+  // שליפת Campaigns מ-Google Sheets (גיליון נפרד)
+  let campaigns = [];
   try {
-    // searchStream מחזיר JSON lines
-    const lines = text.trim().split("\n").filter(l => l.trim());
-    for (const line of lines) {
-      const parsed = JSON.parse(line);
-      const results = parsed.results || [];
-      for (const row of results) {
-        const cost = (Number(row.metrics?.costMicros) || 0) / 1000000;
-        const conv = Number(row.metrics?.conversions) || 0;
-        totalCost += cost;
-        totalConv += conv;
-        if (row.campaign?.name) {
-          campaigns.push({ name: row.campaign.name, cost, conv });
-        }
+    const campResp = await fetch(GADS_CAMPS_CSV + "&t=" + Date.now());
+    const campText = await campResp.text();
+    const campLines = campText.trim().split("\n").map(l => l.split(",").map(c => c.replace(/^"|"$/g, "").trim()));
+    
+    for (let i = 1; i < campLines.length; i++) {
+      const row = campLines[i];
+      if (row.length >= 4 && row[1]) {
+        campaigns.push({
+          name: row[1],
+          cost: parseFloat(row[3]) || 0,
+          conv: parseFloat(row[4]) || 0
+        });
       }
     }
-  } catch(e) {
-    // ניסיון פרסינג כ-JSON רגיל
-    const parsed = JSON.parse(text);
-    const results = parsed.results || [];
-    for (const row of results) {
-      const cost = (Number(row.metrics?.costMicros) || 0) / 1000000;
-      const conv = Number(row.metrics?.conversions) || 0;
-      totalCost += cost;
-      totalConv += conv;
-      if (row.campaign?.name) campaigns.push({ name: row.campaign.name, cost, conv });
-    }
-  }
+  } catch(e) {}
 
   return { totalCost, totalConv, campaigns };
 }
