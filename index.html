@@ -752,6 +752,141 @@ function ProductsTab({products, codeMap}) {
   </div>;
 }
 
+function SeoTab() {
+  // Demo data
+  const demoQueries = [
+    {query:"תרבותו סיול",clicks:142,impressions:2800,ctr:"5.1%",pos:3.2},
+    {query:"טיולים לקוריאה",clicks:98,impressions:3200,ctr:"3.1%",pos:6.8},
+    {query:"סיול מדריך",clicks:87,impressions:1900,ctr:"4.6%",pos:4.1},
+    {query:"טיול מאורגן לקוריאה",clicks:76,impressions:2100,ctr:"3.6%",pos:5.5},
+    {query:"קוריאה חופשה",clicks:65,impressions:2400,ctr:"2.7%",pos:8.2},
+    {query:"מה לעשות בסיול",clicks:54,impressions:1600,ctr:"3.4%",pos:7.1},
+    {query:"טיסות לקוריאה",clicks:43,impressions:1800,ctr:"2.4%",pos:11.3},
+    {query:"אטרקציות בקוריאה",clicks:38,impressions:1400,ctr:"2.7%",pos:9.4},
+  ];
+  const demoPages = [
+    {page:"/korea-tours",title:"טיולים לקוריאה",clicks:245,impressions:4200,ctr:"5.8%",pos:4.2},
+    {page:"/seoul-guide",title:"מדריך סיול",clicks:189,impressions:3100,ctr:"6.1%",pos:3.8},
+    {page:"/",title:"דף הבית",clicks:156,impressions:5600,ctr:"2.8%",pos:8.1},
+    {page:"/blog/korea-tips",title:"טיפים לטיול בקוריאה",clicks:98,impressions:2300,ctr:"4.3%",pos:6.5},
+    {page:"/contact",title:"צור קשר",clicks:67,impressions:1200,ctr:"5.6%",pos:5.2},
+  ];
+  const dailyData = [
+    {d:"01/06",c:42,i:890},{d:"02/06",c:38,i:920},{d:"03/06",c:55,i:1100},
+    {d:"04/06",c:48,i:980},{d:"05/06",c:61,i:1250},{d:"06/06",c:53,i:1180},
+    {d:"07/06",c:67,i:1340},{d:"08/06",c:72,i:1420},{d:"09/06",c:58,i:1290},
+    {d:"10/06",c:76,i:1510},{d:"11/06",c:69,i:1380},{d:"12/06",c:83,i:1620},
+    {d:"13/06",c:79,i:1550},{d:"14/06",c:91,i:1700},
+  ];
+  const maxC = Math.max(...dailyData.map(x=>x.c));
+  const maxI = Math.max(...dailyData.map(x=>x.i));
+
+  const [seoView, setSeoView] = useState("queries");
+
+  return <div>
+    {/* Demo Banner */}
+    <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",borderRadius:8,fontSize:12,marginBottom:10,background:"rgba(240,180,41,.08)",border:"1px solid rgba(240,180,41,.25)",color:T.gold}}>
+      ⚠️ תצוגת דמו — הנתונים כאן לדוגמה בלבד. ברגע שה-Search Console יחובר, הנתונים האמיתיים יופיעו אוטומטית.
+    </div>
+
+    {/* KPIs */}
+    <SecDiv>Google Search Console — ביצועים אורגניים (דמו)</SecDiv>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
+      <Kpi label="🖱️ קליקים" value="892" delta="▲ 18.3% מהתקופה הקודמת" dc={T.teal}/>
+      <Kpi label="👁️ חשיפות" value="18,560" delta="▲ 12.7% מהתקופה הקודמת" color={T.gold} dc={T.teal}/>
+      <Kpi label="📊 CTR ממוצע" value="4.8%" delta="▲ 5.2% מהתקופה הקודמת" color="#7B68EE" dc={T.teal}/>
+      <Kpi label="📍 מיקום ממוצע" value="9.8" delta="▼ שיפור מ-11.4" color="#1A9AE0" dc={T.teal}/>
+    </div>
+
+    {/* Chart - clicks trend */}
+    <div style={{...card,marginBottom:10}}>
+      <div style={ct}>מגמת קליקים — 14 ימים אחרונים</div>
+      <div style={{display:"flex",gap:2,alignItems:"flex-end",height:100,padding:"8px 0"}}>
+        {dailyData.map((x,i)=>(
+          <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+            <div style={{fontSize:9,color:"#F0F4F8",fontWeight:600}}>{x.c}</div>
+            <div style={{width:"100%",background:T.teal,borderRadius:"3px 3px 0 0",height:`${Math.round(x.c/maxC*70)+4}px`,transition:"height .3s",opacity:0.85}}/>
+            <div style={{fontSize:8,color:T.muted}}>{x.d.split("/")[0]}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    {/* Toggle: queries vs pages */}
+    <div style={{display:"flex",gap:6,marginBottom:10}}>
+      <button onClick={()=>setSeoView("queries")}
+        style={{background:seoView==="queries"?T.teal:"transparent",color:seoView==="queries"?"#06251f":T.muted,fontSize:12,padding:"6px 14px",borderRadius:6,border:seoView==="queries"?"none":"1px solid "+T.border,cursor:"pointer",fontWeight:600}}>
+        🔍 מילות חיפוש
+      </button>
+      <button onClick={()=>setSeoView("pages")}
+        style={{background:seoView==="pages"?T.teal:"transparent",color:seoView==="pages"?"#06251f":T.muted,fontSize:12,padding:"6px 14px",borderRadius:6,border:seoView==="pages"?"none":"1px solid "+T.border,cursor:"pointer",fontWeight:600}}>
+        📄 דפים מובילים
+      </button>
+    </div>
+
+    {/* Table */}
+    <div style={card}>
+      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+        <thead><tr>
+          {(seoView==="queries"?["מילת חיפוש","קליקים","חשיפות","CTR","מיקום"]:["דף","קליקים","חשיפות","CTR","מיקום"]).map(h=>
+            <th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"4px 8px 8px",borderBottom:"1px solid "+T.border,fontSize:10}}>{h}</th>
+          )}
+        </tr></thead>
+        <tbody>
+          {(seoView==="queries"?demoQueries:demoPages).map((item,i)=>{
+            const posColor = item.pos<=5?T.teal:item.pos<=10?T.gold:T.red;
+            return <tr key={i} style={{borderBottom:"1px solid "+T.border}}>
+              <td style={{padding:"7px 8px",fontSize:11,color:"#F0F4F8"}}>
+                {seoView==="queries"?item.query:<div><div>{item.title}</div><div style={{fontSize:10,color:T.muted}}>{item.page}</div></div>}
+              </td>
+              <td style={{padding:"7px 8px",color:T.teal,fontWeight:600}}>{item.clicks}</td>
+              <td style={{padding:"7px 8px",color:T.muted}}>{item.impressions.toLocaleString()}</td>
+              <td style={{padding:"7px 8px",color:T.muted}}>{item.ctr}</td>
+              <td style={{padding:"7px 8px"}}>
+                <span style={{fontSize:11,padding:"2px 8px",borderRadius:10,background:`${posColor}20`,color:posColor,fontWeight:600}}>{item.pos}</span>
+              </td>
+            </tr>;
+          })}
+        </tbody>
+      </table>
+    </div>
+
+    {/* Devices + Insights */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
+      <div style={card}>
+        <div style={ct}>התפלגות מכשירים</div>
+        {[{name:"מובייל",pct:62,color:T.teal},{name:"דסקטופ",pct:31,color:"#1A9AE0"},{name:"טאבלט",pct:7,color:T.gold}].map(d=>
+          <div key={d.name} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+            <div style={{width:60,fontSize:11,color:T.muted}}>{d.name}</div>
+            <div style={{flex:1,height:14,background:"rgba(255,255,255,.05)",borderRadius:4,overflow:"hidden"}}>
+              <div style={{width:d.pct+"%",height:"100%",background:d.color,borderRadius:4,display:"flex",alignItems:"center",justifyContent:"flex-end",paddingLeft:6}}>
+                <span style={{fontSize:10,color:"#fff",fontWeight:600}}>{d.pct}%</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      <div style={card}>
+        <div style={ct}>תובנות מהירות</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{padding:"8px 10px",background:"rgba(29,184,160,.08)",borderRadius:6,borderRight:"3px solid "+T.teal}}>
+            <div style={{fontSize:11,fontWeight:600,color:T.teal}}>מילת חיפוש מובילה</div>
+            <div style={{fontSize:11,color:T.muted}}>"תרבותו סיול" — מיקום 3.2</div>
+          </div>
+          <div style={{padding:"8px 10px",background:"rgba(123,104,238,.08)",borderRadius:6,borderRight:"3px solid #7B68EE"}}>
+            <div style={{fontSize:11,fontWeight:600,color:"#9B8FFF"}}>דף עם הכי הרבה קליקים</div>
+            <div style={{fontSize:11,color:T.muted}}>טיולים לקוריאה — 245 קליקים</div>
+          </div>
+          <div style={{padding:"8px 10px",background:"rgba(240,180,41,.08)",borderRadius:6,borderRight:"3px solid "+T.gold}}>
+            <div style={{fontSize:11,fontWeight:600,color:T.gold}}>הזדמנות לשיפור</div>
+            <div style={{fontSize:11,color:T.muted}}>"טיסות לקוריאה" — מיקום 11.3, הרבה חשיפות</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
 function App() {
   const [tab,setTab]         = useState("main");
   const [days,setDays]       = useState("this_month");
@@ -828,7 +963,7 @@ function App() {
   useEffect(()=>{load();},[load]);
   useEffect(()=>{const id=setInterval(load,5*60*1000);return()=>clearInterval(id);},[load]);
 
-  const tabs=[{id:"main",label:"📊 סקירה"},{id:"leads",label:"🔥 לידים"},{id:"inventory",label:"🛳️ מלאי"},{id:"aircall",label:"📞 Aircall"},{id:"ads",label:"📢 פרסום"}];
+  const tabs=[{id:"main",label:"📊 סקירה"},{id:"leads",label:"🔥 לידים"},{id:"inventory",label:"🛳️ מלאי"},{id:"aircall",label:"📞 Aircall"},{id:"ads",label:"📢 פרסום"},{id:"seo",label:"🔍 SEO"}];
 
   return <div style={{background:T.navy,minHeight:"100vh",direction:"rtl"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 18px",borderBottom:"1px solid "+T.border,background:T.navyMid,position:"sticky",top:0,zIndex:10}}>
@@ -1001,6 +1136,7 @@ function App() {
           </div>;
         }
 
+        if(tab==="seo") return <SeoTab/>;
         if(tab==="ads") return <AdsTab won={won} fromStr={fromStr} toStr={toStr} label={label}/>;
 
         return <>
