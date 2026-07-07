@@ -79,6 +79,21 @@ async function acGet(ep) {
   return wfetch("https://api.aircall.io/v1"+ep, {"Authorization":"Basic "+btoa(AC_ID+":"+AC_SEC)});
 }
 
+async function acGetAllCalls(sinceTs) {
+  let all=[], page=1;
+  while(true) {
+    try {
+      const data = await acGet("/calls?order=DESC&per_page=50&from="+sinceTs+"&page="+page);
+      const calls = Array.isArray(data) ? data : (data.calls || data.data || []);
+      if(!calls.length) break;
+      all = [...all, ...calls];
+      if(calls.length < 50 || all.length > 2000) break;
+      page++;
+    } catch(e) { break; }
+  }
+  return all;
+}
+
 function SecDiv({color, children}) {
   return <div style={{fontSize:11,color:T.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:".08em",margin:"14px 0 6px",paddingBottom:5,borderBottom:"1px solid "+T.border,display:"flex",alignItems:"center",gap:7}}>
     <div style={{width:3,height:13,borderRadius:2,background:color||T.teal,flexShrink:0}}/>
@@ -928,12 +943,17 @@ function App() {
     const deduped = [...new Map([...openDeals,...wonDeals].map(d=>[d.id,d])).values()];
     const deals = deduped;
 
-    const [users,stages,products,callsRaw] = await Promise.all([
+    const [users,stages,products] = await Promise.all([
       pdAll("/users").catch(()=>[]),
       pdAll("/stages").catch(()=>[]),
-      pdAll("/products").catch(()=>[]),
-      acGet("/calls?order=DESC&per_page=50&from="+sinceTs).catch(ex=>{e.push("Aircall: "+ex.message);return null;})
+      pdAll("/products").catch(()=>[])
     ]);
+
+    let calls=[], acOK=false;
+    try {
+      calls = await acGetAllCalls(sinceTs);
+      acOK = true;
+    } catch(ex) { e.push("Aircall: "+ex.message); }
 
     const open    = deals.filter(x=>x.status==="open");
     const won     = deals.filter(x=>x.status==="won");
@@ -943,10 +963,6 @@ function App() {
 
     const sm={};stages.forEach(s=>sm[s.id]=s.name);
     const um={};users.forEach(u=>um[u.id]=u.name);
-
-    let calls=[];
-    const acOK=callsRaw!==null;
-    if(acOK){if(Array.isArray(callsRaw))calls=callsRaw;else if(callsRaw.calls)calls=callsRaw.calls;else if(callsRaw.data)calls=callsRaw.data;}
     const ib  = calls.filter(c=>c.direction==="inbound");
     const ob  = calls.filter(c=>c.direction==="outbound");
     const ms  = calls.filter(c=>c.missed===true||c.status==="missed"||(c.direction==="inbound"&&c.answered===false)||(c.direction==="inbound"&&!c.duration));
