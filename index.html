@@ -767,6 +767,226 @@ function ProductsTab({products, codeMap}) {
   </div>;
 }
 
+function CommitmentsTab() {
+  const TODAY = new Date();
+  const diffDays = (dateStr) => Math.ceil((new Date(dateStr) - TODAY) / 86400000);
+
+  // Data from MSC FANTASIA contract
+  const commitments = [
+    {
+      id: 1,
+      company: "MSC Cruises",
+      type: "שייט",
+      ship: "MSC FANTASIA",
+      route: "פונשאל (מדיירה) → איי קנריים",
+      departureDate: "2026-12-22",
+      optionDeadline: "2026-09-12",
+      rooms: [
+        {cat:"2IR",desc:"פנימי סינגל",qty:1,pricePerPax:1838,pax:1},
+        {cat:"2IR",desc:"פנימי זוגי",qty:1,pricePerPax:919,pax:2},
+        {cat:"1OL",desc:"חלון זוגי",qty:4,pricePerPax:1019,pax:2},
+        {cat:"2BL",desc:"מרפסת זוגי",qty:8,pricePerPax:1199,pax:2},
+      ],
+      portTax: 200, // per person
+      handlingFee: 80, // per room
+      serviceFee: 84, // per person
+      commission: 0.13,
+      payments: [
+        {name:"מקדמה",rule:"$50/נוסע (מינ' $100/חדר)",due:"בחתימה",status:"paid"},
+        {name:"15% ממחיר ההפלגה",rule:"15%",dueDate:"2026-08-24",status:"pending"},
+        {name:"50% ממחיר ההפלגה",rule:"50%",dueDate:"2026-10-18",status:"pending"},
+        {name:"15% + יתרה",rule:"15%+",dueDate:"2026-11-22",status:"pending"},
+      ],
+      cancellation: [
+        {from:120,to:999,label:"מעל 120 יום",penalty:"מקדמה בלבד",pct:0,color:T.teal},
+        {from:65,to:119,label:"119-65 יום",penalty:"15%",pct:15,color:T.gold},
+        {from:31,to:64,label:"64-31 יום",penalty:"50%",pct:50,color:"#F06292"},
+        {from:16,to:30,label:"30-16 יום",penalty:"70%",pct:70,color:T.red},
+        {from:0,to:15,label:"15 יום ומטה",penalty:"100%",pct:100,color:"#B71C1C"},
+      ],
+      soldRooms: 3, // example — rooms already sold
+      notes: "נוסע חופשי אחרי 20 נוסעים משלמים. ביטול חדר אחד מ-10+ חדרים מעל 65 יום — ללא דמי ביטול."
+    }
+  ];
+
+  return <div>
+    {commitments.map(c => {
+      const daysToDepart = diffDays(c.departureDate);
+      const daysToOption = diffDays(c.optionDeadline);
+      const totalRooms = c.rooms.reduce((s,r) => s + r.qty, 0);
+      const totalPax = c.rooms.reduce((s,r) => s + r.qty * r.pax, 0);
+      const totalBase = c.rooms.reduce((s,r) => s + r.qty * r.pricePerPax * r.pax, 0);
+      const totalPortTax = totalPax * c.portTax;
+      const totalHandling = totalRooms * c.handlingFee;
+      const totalService = totalPax * c.serviceFee;
+      const totalObligatory = totalPortTax + totalHandling + totalService;
+      const totalPrice = totalBase + totalObligatory;
+      const commissionAmt = totalBase * c.commission;
+      const netCost = totalPrice - commissionAmt;
+      const roomsLeft = totalRooms - c.soldRooms;
+      const soldPct = Math.round(c.soldRooms / totalRooms * 100);
+
+      // Current cancellation zone
+      const currentZone = c.cancellation.find(z => daysToDepart >= z.from && daysToDepart <= z.to) || c.cancellation[c.cancellation.length-1];
+      const penaltyAmount = currentZone.pct > 0 ? Math.round(totalPrice * currentZone.pct / 100) : 1400;
+
+      // Next payment
+      const nextPayment = c.payments.find(p => p.status === "pending" && p.dueDate);
+      const daysToNextPayment = nextPayment ? diffDays(nextPayment.dueDate) : null;
+
+      return <div key={c.id}>
+        {/* Alerts */}
+        {daysToOption > 0 && daysToOption <= 30 && <Alert type="gold">⏰ תקופת האופציה מסתיימת בעוד {daysToOption} ימים ({c.optionDeadline.split("-").reverse().join("/")})</Alert>}
+        {daysToNextPayment !== null && daysToNextPayment <= 14 && daysToNextPayment > 0 && <Alert type="red">💳 תשלום הבא בעוד {daysToNextPayment} ימים! ({nextPayment.dueDate.split("-").reverse().join("/")})</Alert>}
+
+        {/* Header */}
+        <SecDiv color={T.gold}>{c.company} — {c.ship}</SecDiv>
+        <div style={{...card,marginBottom:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+            <div>
+              <div style={{fontSize:16,fontWeight:700,color:"#F0F4F8"}}>{c.ship}</div>
+              <div style={{fontSize:12,color:T.muted,marginTop:2}}>🚢 {c.route}</div>
+              <div style={{fontSize:12,color:T.muted}}>📅 {c.departureDate.split("-").reverse().join("/")}</div>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"center"}}>
+              <div style={{textAlign:"center",padding:"8px 16px",background:"rgba(29,184,160,.08)",borderRadius:8}}>
+                <div style={{fontSize:22,fontWeight:700,color:daysToDepart>90?T.teal:daysToDepart>30?T.gold:T.red}}>{daysToDepart}</div>
+                <div style={{fontSize:10,color:T.muted}}>ימים להפלגה</div>
+              </div>
+              {daysToOption > 0 && <div style={{textAlign:"center",padding:"8px 16px",background:"rgba(240,180,41,.08)",borderRadius:8}}>
+                <div style={{fontSize:22,fontWeight:700,color:daysToOption>30?T.gold:T.red}}>{daysToOption}</div>
+                <div style={{fontSize:10,color:T.muted}}>ימים לאופציה</div>
+              </div>}
+            </div>
+          </div>
+        </div>
+
+        {/* KPIs */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
+          <Kpi label="🚪 חדרים" value={totalRooms} delta={totalPax+" נוסעים"}/>
+          <Kpi label="💵 סה״כ התחייבות" value={"$"+totalPrice.toLocaleString()} color={T.gold}/>
+          <Kpi label="🏷️ עמלה (13%)" value={"$"+Math.round(commissionAmt).toLocaleString()} color={T.teal} dc={T.teal}/>
+          <Kpi label="💰 עלות נטו" value={"$"+Math.round(netCost).toLocaleString()} color="#7B68EE"/>
+        </div>
+
+        {/* Sales Progress */}
+        <div style={{...card,marginBottom:10}}>
+          <div style={ct}>התקדמות מכירות</div>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{flex:1}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                <span style={{fontSize:12,color:"#F0F4F8",fontWeight:600}}>נמכרו {c.soldRooms} מתוך {totalRooms} חדרים</span>
+                <span style={{fontSize:12,fontWeight:700,color:soldPct>=70?T.teal:soldPct>=40?T.gold:T.red}}>{soldPct}%</span>
+              </div>
+              <div style={{height:16,background:"rgba(255,255,255,.06)",borderRadius:8,overflow:"hidden"}}>
+                <div style={{width:soldPct+"%",height:"100%",background:soldPct>=70?T.teal:soldPct>=40?T.gold:T.red,borderRadius:8,transition:"width .5s"}}/>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:6}}>
+                <span style={{fontSize:11,color:T.teal}}>✅ נמכרו: {c.soldRooms}</span>
+                <span style={{fontSize:11,color:T.gold}}>⏳ נשארו: {roomsLeft}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Rooms Detail */}
+        <div style={{...card,marginBottom:10}}>
+          <div style={ct}>פירוט חדרים</div>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+            <thead><tr>
+              {["קטגוריה","תיאור","כמות","מחיר/נוסע","נוסעים","סה״כ בסיס","תשלומי חובה","סה״כ"].map(h=>
+                <th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"4px 8px 8px",borderBottom:"1px solid "+T.border,fontSize:10}}>{h}</th>
+              )}
+            </tr></thead>
+            <tbody>{c.rooms.map((r,i)=>{
+              const roomBase = r.qty * r.pricePerPax * r.pax;
+              const roomPax = r.qty * r.pax;
+              const roomOblig = roomPax * c.portTax + r.qty * c.handlingFee + roomPax * c.serviceFee;
+              return <tr key={i} style={{borderBottom:"1px solid "+T.border}}>
+                <td style={{padding:"7px 8px"}}><span style={{fontSize:11,padding:"2px 8px",borderRadius:10,background:"rgba(123,104,238,.1)",color:"#9B8FFF",fontWeight:600}}>{r.cat}</span></td>
+                <td style={{padding:"7px 8px",color:"#F0F4F8",fontSize:11}}>{r.desc}</td>
+                <td style={{padding:"7px 8px",color:T.muted,fontWeight:600}}>{r.qty}</td>
+                <td style={{padding:"7px 8px",color:T.gold,fontWeight:600}}>${r.pricePerPax.toLocaleString()}</td>
+                <td style={{padding:"7px 8px",color:T.muted}}>{roomPax}</td>
+                <td style={{padding:"7px 8px",color:"#F0F4F8",fontWeight:600}}>${roomBase.toLocaleString()}</td>
+                <td style={{padding:"7px 8px",color:T.muted}}>${roomOblig.toLocaleString()}</td>
+                <td style={{padding:"7px 8px",color:T.teal,fontWeight:700}}>${(roomBase+roomOblig).toLocaleString()}</td>
+              </tr>;
+            })}</tbody>
+            <tr style={{borderTop:"2px solid "+T.border}}>
+              <td colSpan={5} style={{padding:"8px",fontWeight:700,fontSize:12,color:"#F0F4F8"}}>סה״כ</td>
+              <td style={{padding:"8px",fontWeight:700,color:"#F0F4F8"}}>${totalBase.toLocaleString()}</td>
+              <td style={{padding:"8px",fontWeight:700,color:T.muted}}>${totalObligatory.toLocaleString()}</td>
+              <td style={{padding:"8px",fontWeight:700,color:T.teal}}>${totalPrice.toLocaleString()}</td>
+            </tr>
+          </table>
+        </div>
+
+        {/* Payment Schedule + Cancellation side by side */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+          {/* Payments */}
+          <div style={card}>
+            <div style={ct}>לוח תשלומים</div>
+            {c.payments.map((p,i) => {
+              const daysLeft = p.dueDate ? diffDays(p.dueDate) : null;
+              const urgent = daysLeft !== null && daysLeft <= 14 && daysLeft > 0;
+              const overdue = daysLeft !== null && daysLeft <= 0 && p.status !== "paid";
+              return <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid "+T.border}}>
+                <div>
+                  <div style={{fontSize:12,fontWeight:600,color:"#F0F4F8"}}>{p.name}</div>
+                  <div style={{fontSize:11,color:T.muted}}>
+                    {p.dueDate ? "עד "+p.dueDate.split("-").reverse().join("/") : p.due}
+                    {daysLeft !== null && daysLeft > 0 && <span style={{marginRight:6,color:urgent?T.red:T.muted}}> ({daysLeft} ימים)</span>}
+                  </div>
+                </div>
+                <span style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:20,
+                  background: p.status==="paid" ? "rgba(29,184,160,.15)" : overdue ? "rgba(232,72,85,.15)" : urgent ? "rgba(240,180,41,.15)" : "rgba(255,255,255,.06)",
+                  color: p.status==="paid" ? T.teal : overdue ? T.red : urgent ? T.gold : T.muted
+                }}>
+                  {p.status==="paid" ? "✅ שולם" : overdue ? "❗ באיחור" : "⏳ ממתין"}
+                </span>
+              </div>;
+            })}
+          </div>
+
+          {/* Cancellation */}
+          <div style={card}>
+            <div style={ct}>דמי ביטול — איפה אתה עכשיו?</div>
+            {c.cancellation.map((z,i) => {
+              const isCurrent = daysToDepart >= z.from && daysToDepart <= z.to;
+              return <div key={i} style={{
+                display:"flex",justifyContent:"space-between",alignItems:"center",
+                padding:"8px 10px",marginBottom:4,borderRadius:6,
+                background: isCurrent ? z.color+"20" : "transparent",
+                border: isCurrent ? "1px solid "+z.color : "1px solid transparent",
+              }}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  {isCurrent && <span style={{fontSize:14}}>👉</span>}
+                  <div>
+                    <div style={{fontSize:12,fontWeight:isCurrent?700:400,color:isCurrent?"#F0F4F8":T.muted}}>{z.label}</div>
+                    <div style={{fontSize:10,color:T.muted}}>{z.penalty}</div>
+                  </div>
+                </div>
+                <span style={{fontSize:13,fontWeight:700,color:z.color}}>{z.pct > 0 ? z.pct+"%" : "מקדמה"}</span>
+              </div>;
+            })}
+            <div style={{marginTop:8,padding:"8px 10px",background:"rgba(255,255,255,.04)",borderRadius:6}}>
+              <div style={{fontSize:11,color:T.muted}}>דמי ביטול נוכחיים (כל החדרים):</div>
+              <div style={{fontSize:18,fontWeight:700,color:currentZone.color}}>${penaltyAmount.toLocaleString()}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Notes */}
+        {c.notes && <div style={{...card,marginBottom:10}}>
+          <div style={ct}>הערות</div>
+          <div style={{fontSize:12,color:T.muted,lineHeight:1.8}}>{c.notes}</div>
+        </div>}
+      </div>;
+    })}
+  </div>;
+}
+
 function SeoTab() {
   // Demo data
   const demoQueries = [
@@ -979,7 +1199,7 @@ function App() {
   useEffect(()=>{load();},[load]);
   useEffect(()=>{const id=setInterval(load,5*60*1000);return()=>clearInterval(id);},[load]);
 
-  const tabs=[{id:"main",label:"📊 סקירה"},{id:"leads",label:"🔥 לידים"},{id:"inventory",label:"🛳️ מלאי"},{id:"aircall",label:"📞 Aircall"},{id:"ads",label:"📢 פרסום"},{id:"seo",label:"🔍 SEO"}];
+  const tabs=[{id:"main",label:"📊 סקירה"},{id:"leads",label:"🔥 לידים"},{id:"inventory",label:"🛳️ מלאי"},{id:"aircall",label:"📞 Aircall"},{id:"ads",label:"📢 פרסום"},{id:"commitments",label:"💼 התחייבויות"},{id:"seo",label:"🔍 SEO"}];
 
   return <div style={{background:T.navy,minHeight:"100vh",direction:"rtl"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 18px",borderBottom:"1px solid "+T.border,background:T.navyMid,position:"sticky",top:0,zIndex:10}}>
@@ -1152,6 +1372,7 @@ function App() {
           </div>;
         }
 
+        if(tab==="commitments") return <CommitmentsTab/>;
         if(tab==="seo") return <SeoTab/>;
         if(tab==="ads") return <AdsTab won={won} fromStr={fromStr} toStr={toStr} label={label}/>;
 
