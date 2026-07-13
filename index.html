@@ -888,21 +888,21 @@ function CommitmentsTab({products, codeMap}) {
                   {cruiseCompanies.map(c=><option key={c.name} value={c.name}>{c.name}</option>)}
                 </select>
               </td>
-              <td style={{padding:"8px",minWidth:180}}>
-                {selectedCruise ? <div>
-                  {selectedCruise.commission && <div style={{fontSize:10,color:T.teal,marginBottom:4}}>עמלה: {selectedCruise.commission}</div>}
-                  {selectedCruise.payments && selectedCruise.payments.length > 0 && <div style={{marginBottom:4}}>
-                    {selectedCruise.payments.map((p,i) => <div key={i} style={{fontSize:10,color:"#F0F4F8",padding:"2px 0"}}>💳 {p.description}</div>)}
-                  </div>}
-                  {selectedCruise.cancellation && selectedCruise.cancellation.length > 0 &&
-                    selectedCruise.cancellation.map((z,i) => {
-                      const {dateStr,inZone,zoneColor} = calcDates(z);
-                      return <div key={i} style={{fontSize:10,padding:"3px 5px",marginBottom:2,borderRadius:4,background:inZone?zoneColor+"20":"transparent",color:inZone?"#F0F4F8":T.muted,fontWeight:inZone?700:400}}>
-                        {inZone?"👉 ":""}<span style={{color:zoneColor}}>{z.penalty}</span>{dateStr?" — "+dateStr:""}
-                      </div>;
-                    })
+              <td style={{padding:"8px"}}>
+                {selectedCruise ? (() => {
+                  const currentZone = (selectedCruise.cancellation||[]).find(z => {
+                    const {inZone} = calcDates(z);
+                    return inZone;
+                  });
+                  if(currentZone){
+                    const {dateStr,zoneColor} = calcDates(currentZone);
+                    return <div style={{fontSize:10,padding:"4px 8px",borderRadius:6,background:zoneColor+"20",border:"1px solid "+zoneColor,whiteSpace:"nowrap"}}>
+                      <span style={{color:zoneColor,fontWeight:700}}>{currentZone.penalty}</span>
+                      {dateStr && <div style={{color:T.muted,fontSize:9,marginTop:2}}>{dateStr}</div>}
+                    </div>;
                   }
-                </div> : <span style={{fontSize:10,color:T.muted}}>–</span>}
+                  return <span style={{fontSize:10,color:T.muted}}>–</span>;
+                })() : <span style={{fontSize:10,color:T.muted}}>–</span>}
               </td>
               <td style={{padding:"8px"}}>
                 <select value={sel.airline||""} onChange={e=>updateSelection(t.code,"airline",e.target.value)}
@@ -911,18 +911,21 @@ function CommitmentsTab({products, codeMap}) {
                   {airlineCompanies.map(c=><option key={c.name} value={c.name}>{c.name}</option>)}
                 </select>
               </td>
-              <td style={{padding:"8px",minWidth:180}}>
-                {selectedAirline ? <div>
-                  {selectedAirline.terms && <div style={{fontSize:10,color:"#F0F4F8",marginBottom:4,lineHeight:1.6}}>{selectedAirline.terms}</div>}
-                  {selectedAirline.cancellation && selectedAirline.cancellation.length > 0 &&
-                    selectedAirline.cancellation.map((z,i) => {
-                      const {dateStr,inZone,zoneColor} = calcDates(z);
-                      return <div key={i} style={{fontSize:10,padding:"3px 5px",marginBottom:2,borderRadius:4,background:inZone?zoneColor+"20":"transparent",color:inZone?"#F0F4F8":T.muted,fontWeight:inZone?700:400}}>
-                        {inZone?"👉 ":""}<span style={{color:zoneColor}}>{z.penalty}</span>{dateStr?" — "+dateStr:""}
-                      </div>;
-                    })
+              <td style={{padding:"8px"}}>
+                {selectedAirline ? (() => {
+                  const currentZone = (selectedAirline.cancellation||[]).find(z => {
+                    const {inZone} = calcDates(z);
+                    return inZone;
+                  });
+                  if(currentZone){
+                    const {dateStr,zoneColor} = calcDates(currentZone);
+                    return <div style={{fontSize:10,padding:"4px 8px",borderRadius:6,background:zoneColor+"20",border:"1px solid "+zoneColor,whiteSpace:"nowrap"}}>
+                      <span style={{color:zoneColor,fontWeight:700}}>{currentZone.penalty}</span>
+                      {dateStr && <div style={{color:T.muted,fontSize:9,marginTop:2}}>{dateStr}</div>}
+                    </div>;
                   }
-                </div> : <span style={{fontSize:10,color:T.muted}}>–</span>}
+                  return <span style={{fontSize:10,color:T.muted}}>–</span>;
+                })() : <span style={{fontSize:10,color:T.muted}}>–</span>}
               </td>
             </tr>;
           })}
