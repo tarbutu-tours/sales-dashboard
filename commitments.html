@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ניהול התחייבויות</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Segoe UI',Arial,sans-serif;background:#0B1F3A;color:#F0F4F8;direction:rtl;min-height:100vh;padding:1.5rem}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:10px}
+h1{font-size:18px;font-weight:600;color:#1DB8A0}
+h2{font-size:15px;font-weight:600;color:#F0B429;margin-bottom:10px}
+.sub{font-size:12px;color:#7A9BBF;margin-top:3px}
+.back-btn{font-size:12px;padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:transparent;color:#7A9BBF;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:5px}
+.back-btn:hover{border-color:#1DB8A0;color:#1DB8A0}
+.card{background:#1A3257;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:1.1rem 1.25rem;margin-bottom:12px}
+.tabs{display:flex;gap:2px;margin-bottom:12px}
+.tab-btn{padding:8px 18px;border-radius:8px 8px 0 0;border:1px solid rgba(255,255,255,.07);border-bottom:none;background:transparent;color:#7A9BBF;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit}
+.tab-btn.active{background:#1A3257;color:#F0F4F8;font-weight:600}
+input,select,textarea{background:#132847;border:1px solid rgba(255,255,255,.1);color:#F0F4F8;font-size:13px;padding:8px 12px;border-radius:8px;font-family:inherit;direction:rtl}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#1DB8A0}
+textarea{resize:vertical;min-height:60px;width:100%}
+.btn{padding:8px 16px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
+.btn-add{background:#1DB8A0;color:#fff}.btn-add:hover{background:#16967f}
+.btn-del{background:rgba(232,72,85,.12);color:#F0827A;border:1px solid rgba(232,72,85,.2);padding:4px 10px;font-size:11px}.btn-del:hover{background:rgba(232,72,85,.22)}
+.btn-save{background:#1A9AE0;color:#fff;width:100%;padding:11px;margin-top:10px}.btn-save:hover{background:#1480C0}
+.btn-edit{background:rgba(26,154,224,.1);color:#5BB8F0;border:1px solid rgba(26,154,224,.2);padding:4px 10px;font-size:11px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{color:#7A9BBF;font-weight:500;text-align:right;padding:6px 10px 8px;border-bottom:1px solid rgba(255,255,255,.07);font-size:10px;text-transform:uppercase;letter-spacing:.04em}
+td{padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.05)}
+tr:hover td{background:rgba(255,255,255,.02)}
+.badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:6px;font-weight:600}
+.badge-cruise{background:rgba(26,154,224,.15);color:#5BB8F0}
+.badge-airline{background:rgba(123,104,238,.15);color:#A89AFF}
+.empty{text-align:center;color:#7A9BBF;font-size:13px;padding:2rem}
+.saved-msg{font-size:12px;color:#1DB8A0;text-align:center;margin-top:6px;min-height:18px}
+.form-group{margin-bottom:10px}
+.form-group label{font-size:11px;color:#7A9BBF;display:block;margin-bottom:4px;font-weight:500}
+.form-row{display:flex;gap:10px;flex-wrap:wrap}
+.form-row>*{flex:1;min-width:140px}
+.cancel-row{display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
+.cancel-row input{width:70px}
+.section-title{font-size:11px;color:#7A9BBF;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid rgba(255,255,255,.07)}
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:100}
+.modal{background:#1A3257;border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:1.5rem;width:600px;max-width:95vw;max-height:90vh;overflow-y:auto}
+.modal h2{color:#1DB8A0}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <h1>💼 ניהול התחייבויות — חברות שייט ותעופה</h1>
+    <div class="sub">הגדר כאן את חברות השייט והתעופה עם תנאי ההתחייבות שלהם. הנתונים יופיעו בדשבורד.</div>
+  </div>
+  <a href="index.html" class="back-btn">← חזור לדשבורד</a>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('cruise')" id="tabCruise">🚢 חברות שייט</button>
+  <button class="tab-btn" onclick="switchTab('airline')" id="tabAirline">✈️ חברות תעופה</button>
+</div>
+
+<!-- Cruise Companies -->
+<div id="cruiseSection" class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h2>🚢 חברות שייט</h2>
+    <button class="btn btn-add" onclick="openModal('cruise')">+ הוסף חברת שייט</button>
+  </div>
+  <table>
+    <thead><tr>
+      <th>שם החברה</th>
+      <th>תנאי תשלום</th>
+      <th>דמי ביטול</th>
+      <th>עמלה</th>
+      <th>הערות</th>
+      <th style="width:100px"></th>
+    </tr></thead>
+    <tbody id="cruiseTable"></tbody>
+  </table>
+  <div class="empty" id="cruiseEmpty" style="display:none">אין חברות שייט — הוסף את הראשונה</div>
+</div>
+
+<!-- Airline Companies -->
+<div id="airlineSection" class="card" style="display:none">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h2>✈️ חברות תעופה</h2>
+    <button class="btn btn-add" onclick="openModal('airline')">+ הוסף חברת תעופה</button>
+  </div>
+  <table>
+    <thead><tr>
+      <th>שם החברה</th>
+      <th>תנאי התחייבות</th>
+      <th>דמי ביטול</th>
+      <th>הערות</th>
+      <th style="width:100px"></th>
+    </tr></thead>
+    <tbody id="airlineTable"></tbody>
+  </table>
+  <div class="empty" id="airlineEmpty" style="display:none">אין חברות תעופה — הוסף את הראשונה</div>
+</div>
+
+<button class="btn btn-save" onclick="saveAll()">💾 שמור הכל</button>
+<div class="saved-msg" id="savedMsg"></div>
+
+<div style="font-size:11px;color:#7A9BBF;text-align:center;margin-top:8px;line-height:1.8">
+  💡 הנתונים נשמרים בדפדפן ומסונכרנים אוטומטית עם הדשבורד.
+</div>
+
+<!-- Modal -->
+<div id="modalOverlay" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<script>
+let cruiseCompanies = [];
+let airlineCompanies = [];
+
+const DEFAULT_CRUISE = [
+  {
+    name: "MSC Cruises",
+    commission: "13% ממחיר הבסיס",
+    payments: [
+      {description: "מקדמה: $50 לנוסע (מינימום $100 לחדר) — בחתימה על ההסכם"},
+      {description: "15% ממחיר ההפלגה — לא יאוחר מ-120 יום לפני ההפלגה"},
+      {description: "50% ממחיר ההפלגה — לא יאוחר מ-65 יום לפני ההפלגה"},
+      {description: "15% + יתרה — לא יאוחר מ-30 יום לפני ההפלגה"}
+    ],
+    cancellation: [
+      {days: "120+", penalty: "מקדמה בלבד ($50/נוסע)"},
+      {days: "119-65", penalty: "15% ממחיר ההפלגה"},
+      {days: "64-31", penalty: "50% ממחיר ההפלגה"},
+      {days: "30-16", penalty: "70% ממחיר ההפלגה"},
+      {days: "15 ומטה", penalty: "100% ממחיר ההפלגה"}
+    ],
+    notes: "נוסע חופשי אחרי 20 נוסעים משלמים (הנחה 100% על מחיר בסיס בקטגוריה הנמוכה). ביטול חדר אחד מקבוצה של 10+ חדרים מעל 65 יום — ללא דמי ביטול. תשלומי חובה: מסי נמל $200/אדם, דמי טיפול $80/חדר, דמי שירות $84/אדם. עמלה לא חלה על תשלומי חובה."
+  }
+];
+let editingIndex = -1;
+let editingType = "";
+
+function load() {
+  try {
+    const c = localStorage.getItem("commitment_cruise");
+    cruiseCompanies = c ? JSON.parse(c) : DEFAULT_CRUISE.map(x=>({...x}));
+    const a = localStorage.getItem("commitment_airline");
+    if (a) airlineCompanies = JSON.parse(a);
+  } catch(e) {}
+  save();
+  renderAll();
+}
+
+function save() {
+  localStorage.setItem("commitment_cruise", JSON.stringify(cruiseCompanies));
+  localStorage.setItem("commitment_airline", JSON.stringify(airlineCompanies));
+}
+
+function saveAll() {
+  save();
+  showMsg("✓ נשמר בהצלחה");
+}
+
+function switchTab(tab) {
+  document.getElementById("cruiseSection").style.display = tab === "cruise" ? "block" : "none";
+  document.getElementById("airlineSection").style.display = tab === "airline" ? "block" : "none";
+  document.getElementById("tabCruise").className = "tab-btn" + (tab === "cruise" ? " active" : "");
+  document.getElementById("tabAirline").className = "tab-btn" + (tab === "airline" ? " active" : "");
+}
+
+function renderAll() {
+  renderCruise();
+  renderAirline();
+}
+
+function renderCruise() {
+  const tbody = document.getElementById("cruiseTable");
+  const empty = document.getElementById("cruiseEmpty");
+  if (!cruiseCompanies.length) { tbody.innerHTML = ""; empty.style.display = "block"; return; }
+  empty.style.display = "none";
+  tbody.innerHTML = cruiseCompanies.map((c, i) => {
+    const paymentSummary = (c.payments || []).map(p => p.description).join(" → ") || "–";
+    const cancelSummary = (c.cancellation || []).map(z => z.days + " יום: " + z.penalty).join(", ") || "–";
+    return `<tr>
+      <td><strong style="color:#F0F4F8">${c.name}</strong></td>
+      <td style="font-size:11px;color:#7A9BBF;max-width:200px">${paymentSummary.substring(0,60)}${paymentSummary.length>60?"...":""}</td>
+      <td style="font-size:11px;color:#7A9BBF;max-width:200px">${cancelSummary.substring(0,60)}${cancelSummary.length>60?"...":""}</td>
+      <td style="font-size:11px;color:#1DB8A0;font-weight:600">${c.commission || "–"}</td>
+      <td style="font-size:11px;color:#7A9BBF">${(c.notes||"").substring(0,30)}${(c.notes||"").length>30?"...":""}</td>
+      <td>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-edit" onclick="editCompany('cruise',${i})">✏️</button>
+          <button class="btn btn-del" onclick="deleteCompany('cruise',${i})">🗑</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+function renderAirline() {
+  const tbody = document.getElementById("airlineTable");
+  const empty = document.getElementById("airlineEmpty");
+  if (!airlineCompanies.length) { tbody.innerHTML = ""; empty.style.display = "block"; return; }
+  empty.style.display = "none";
+  tbody.innerHTML = airlineCompanies.map((c, i) => {
+    const termsSummary = (c.terms || "–").substring(0, 80);
+    const cancelSummary = (c.cancellation || []).map(z => z.days + " יום: " + z.penalty).join(", ") || "–";
+    return `<tr>
+      <td><strong style="color:#F0F4F8">${c.name}</strong></td>
+      <td style="font-size:11px;color:#7A9BBF;max-width:200px">${termsSummary}${(c.terms||"").length>80?"...":""}</td>
+      <td style="font-size:11px;color:#7A9BBF;max-width:200px">${cancelSummary.substring(0,60)}${cancelSummary.length>60?"...":""}</td>
+      <td style="font-size:11px;color:#7A9BBF">${(c.notes||"").substring(0,30)}${(c.notes||"").length>30?"...":""}</td>
+      <td>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-edit" onclick="editCompany('airline',${i})">✏️</button>
+          <button class="btn btn-del" onclick="deleteCompany('airline',${i})">🗑</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+function openModal(type, index) {
+  editingType = type;
+  editingIndex = index !== undefined ? index : -1;
+  const isEdit = editingIndex >= 0;
+  const data = isEdit ? (type === "cruise" ? cruiseCompanies[index] : airlineCompanies[index]) : null;
+
+  if (type === "cruise") {
+    const payments = data ? data.payments || [] : [];
+    const cancellation = data ? data.cancellation || [] : [];
+    document.getElementById("modalContent").innerHTML = `
+      <h2>${isEdit ? "✏️ עריכת" : "➕ הוספת"} חברת שייט</h2>
+      <div class="form-group"><label>שם החברה</label><input id="mName" value="${data?.name||""}" style="width:100%"/></div>
+      <div class="form-group"><label>עמלה</label><input id="mCommission" value="${data?.commission||""}" placeholder="למשל: 13%" style="width:100%"/></div>
+
+      <div class="section-title">תנאי תשלום</div>
+      <div id="paymentsContainer">
+        ${payments.map((p,i) => paymentRow(i, p.description)).join("")}
+      </div>
+      <button class="btn" style="background:rgba(29,184,160,.1);color:#1DB8A0;border:1px solid rgba(29,184,160,.2);margin:6px 0" onclick="addPaymentRow()">+ הוסף תשלום</button>
+
+      <div class="section-title">דמי ביטול</div>
+      <div id="cancelContainer">
+        ${cancellation.map((z,i) => cancelRow(i, z.days, z.penalty)).join("")}
+      </div>
+      <button class="btn" style="background:rgba(240,180,41,.1);color:#F0B429;border:1px solid rgba(240,180,41,.2);margin:6px 0" onclick="addCancelRow()">+ הוסף טווח ביטול</button>
+
+      <div class="section-title">הערות</div>
+      <div class="form-group"><textarea id="mNotes" placeholder="הערות נוספות...">${data?.notes||""}</textarea></div>
+
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn btn-add" style="flex:1" onclick="saveCruise()">💾 שמור</button>
+        <button class="btn" style="flex:1;background:rgba(255,255,255,.05);color:#7A9BBF" onclick="closeModal()">ביטול</button>
+      </div>
+    `;
+  } else {
+    const cancellation = data ? data.cancellation || [] : [];
+    document.getElementById("modalContent").innerHTML = `
+      <h2>${isEdit ? "✏️ עריכת" : "➕ הוספת"} חברת תעופה</h2>
+      <div class="form-group"><label>שם החברה</label><input id="mName" value="${data?.name||""}" style="width:100%"/></div>
+      <div class="form-group"><label>תנאי התחייבות</label><textarea id="mTerms" placeholder="למשל: התחייבות ל-20 מושבים, תשלום 30 יום מראש...">${data?.terms||""}</textarea></div>
+
+      <div class="section-title">דמי ביטול</div>
+      <div id="cancelContainer">
+        ${cancellation.map((z,i) => cancelRow(i, z.days, z.penalty)).join("")}
+      </div>
+      <button class="btn" style="background:rgba(240,180,41,.1);color:#F0B429;border:1px solid rgba(240,180,41,.2);margin:6px 0" onclick="addCancelRow()">+ הוסף טווח ביטול</button>
+
+      <div class="section-title">הערות</div>
+      <div class="form-group"><textarea id="mNotes" placeholder="הערות נוספות...">${data?.notes||""}</textarea></div>
+
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn btn-add" style="flex:1" onclick="saveAirline()">💾 שמור</button>
+        <button class="btn" style="flex:1;background:rgba(255,255,255,.05);color:#7A9BBF" onclick="closeModal()">ביטול</button>
+      </div>
+    `;
+  }
+  document.getElementById("modalOverlay").style.display = "flex";
+}
+
+function closeModal() {
+  document.getElementById("modalOverlay").style.display = "none";
+}
+
+let paymentCount = 0;
+let cancelCount = 0;
+
+function paymentRow(i, desc) {
+  return `<div class="cancel-row" id="payRow${i}">
+    <input value="${desc||""}" placeholder="תיאור תשלום (למשל: מקדמה $50/נוסע)" style="flex:1;min-width:250px" id="payDesc${i}"/>
+    <button class="btn btn-del" onclick="document.getElementById('payRow${i}').remove()">✕</button>
+  </div>`;
+}
+
+function cancelRow(i, days, penalty) {
+  return `<div class="cancel-row" id="canRow${i}">
+    <input value="${days||""}" placeholder="ימים לפני" style="width:80px" id="canDays${i}"/>
+    <input value="${penalty||""}" placeholder="דמי ביטול (למשל: 15%)" style="flex:1;min-width:150px" id="canPenalty${i}"/>
+    <button class="btn btn-del" onclick="document.getElementById('canRow${i}').remove()">✕</button>
+  </div>`;
+}
+
+function addPaymentRow() {
+  paymentCount++;
+  const id = "pay_new_" + paymentCount;
+  const div = document.createElement("div");
+  div.className = "cancel-row";
+  div.id = id;
+  div.innerHTML = `
+    <input placeholder="תיאור תשלום" style="flex:1;min-width:250px" id="${id}_desc"/>
+    <button class="btn btn-del" onclick="document.getElementById('${id}').remove()">✕</button>
+  `;
+  document.getElementById("paymentsContainer").appendChild(div);
+}
+
+function addCancelRow() {
+  cancelCount++;
+  const id = "can_new_" + cancelCount;
+  const div = document.createElement("div");
+  div.className = "cancel-row";
+  div.id = id;
+  div.innerHTML = `
+    <input placeholder="ימים לפני" style="width:80px" id="${id}_days"/>
+    <input placeholder="דמי ביטול" style="flex:1;min-width:150px" id="${id}_penalty"/>
+    <button class="btn btn-del" onclick="document.getElementById('${id}').remove()">✕</button>
+  `;
+  document.getElementById("cancelContainer").appendChild(div);
+}
+
+function collectPayments() {
+  const container = document.getElementById("paymentsContainer");
+  if (!container) return [];
+  const rows = container.querySelectorAll(".cancel-row");
+  const payments = [];
+  rows.forEach(row => {
+    const inputs = row.querySelectorAll("input");
+    const desc = inputs[0]?.value?.trim();
+    if (desc) payments.push({ description: desc });
+  });
+  return payments;
+}
+
+function collectCancellation() {
+  const container = document.getElementById("cancelContainer");
+  if (!container) return [];
+  const rows = container.querySelectorAll(".cancel-row");
+  const items = [];
+  rows.forEach(row => {
+    const inputs = row.querySelectorAll("input");
+    const days = inputs[0]?.value?.trim();
+    const penalty = inputs[1]?.value?.trim();
+    if (days || penalty) items.push({ days: days || "", penalty: penalty || "" });
+  });
+  return items;
+}
+
+function saveCruise() {
+  const name = document.getElementById("mName").value.trim();
+  if (!name) { alert("הכנס שם חברה"); return; }
+  const obj = {
+    name,
+    commission: document.getElementById("mCommission").value.trim(),
+    payments: collectPayments(),
+    cancellation: collectCancellation(),
+    notes: document.getElementById("mNotes").value.trim()
+  };
+  if (editingIndex >= 0) {
+    cruiseCompanies[editingIndex] = obj;
+  } else {
+    cruiseCompanies.push(obj);
+  }
+  save(); renderAll(); closeModal();
+  showMsg("✓ חברת שייט " + name + " נשמרה");
+}
+
+function saveAirline() {
+  const name = document.getElementById("mName").value.trim();
+  if (!name) { alert("הכנס שם חברה"); return; }
+  const obj = {
+    name,
+    terms: document.getElementById("mTerms").value.trim(),
+    cancellation: collectCancellation(),
+    notes: document.getElementById("mNotes").value.trim()
+  };
+  if (editingIndex >= 0) {
+    airlineCompanies[editingIndex] = obj;
+  } else {
+    airlineCompanies.push(obj);
+  }
+  save(); renderAll(); closeModal();
+  showMsg("✓ חברת תעופה " + name + " נשמרה");
+}
+
+function editCompany(type, index) {
+  openModal(type, index);
+}
+
+function deleteCompany(type, index) {
+  const list = type === "cruise" ? cruiseCompanies : airlineCompanies;
+  if (confirm("למחוק את " + list[index].name + "?")) {
+    list.splice(index, 1);
+    save(); renderAll();
+  }
+}
+
+function showMsg(txt, color) {
+  const el = document.getElementById("savedMsg");
+  el.textContent = txt;
+  el.style.color = color === "red" ? "#F0827A" : "#1DB8A0";
+  setTimeout(() => el.textContent = "", 2500);
+}
+
+load();
+</script>
+</body>
+</html>
