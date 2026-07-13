@@ -767,223 +767,163 @@ function ProductsTab({products, codeMap}) {
   </div>;
 }
 
-function CommitmentsTab() {
-  const TODAY = new Date();
-  const diffDays = (dateStr) => Math.ceil((new Date(dateStr) - TODAY) / 86400000);
+function CommitmentsTab({products, codeMap}) {
+  const [selections, setSelections] = useState(() => {
+    try { const s = localStorage.getItem("commitment_selections"); return s ? JSON.parse(s) : {}; } catch(e) { return {}; }
+  });
+  const [expandedRow, setExpandedRow] = useState(null);
 
-  // Data from MSC FANTASIA contract
-  const commitments = [
-    {
-      id: 1,
-      company: "MSC Cruises",
-      type: "שייט",
-      ship: "MSC FANTASIA",
-      route: "פונשאל (מדיירה) → איי קנריים",
-      departureDate: "2026-12-22",
-      optionDeadline: "2026-09-12",
-      rooms: [
-        {cat:"2IR",desc:"פנימי סינגל",qty:1,pricePerPax:1838,pax:1},
-        {cat:"2IR",desc:"פנימי זוגי",qty:1,pricePerPax:919,pax:2},
-        {cat:"1OL",desc:"חלון זוגי",qty:4,pricePerPax:1019,pax:2},
-        {cat:"2BL",desc:"מרפסת זוגי",qty:8,pricePerPax:1199,pax:2},
-      ],
-      portTax: 200, // per person
-      handlingFee: 80, // per room
-      serviceFee: 84, // per person
-      commission: 0.13,
-      payments: [
-        {name:"מקדמה",rule:"$50/נוסע (מינ' $100/חדר)",due:"בחתימה",status:"paid"},
-        {name:"15% ממחיר ההפלגה",rule:"15%",dueDate:"2026-08-24",status:"pending"},
-        {name:"50% ממחיר ההפלגה",rule:"50%",dueDate:"2026-10-18",status:"pending"},
-        {name:"15% + יתרה",rule:"15%+",dueDate:"2026-11-22",status:"pending"},
-      ],
-      cancellation: [
-        {from:120,to:999,label:"מעל 120 יום",penalty:"מקדמה בלבד",pct:0,color:T.teal},
-        {from:65,to:119,label:"119-65 יום",penalty:"15%",pct:15,color:T.gold},
-        {from:31,to:64,label:"64-31 יום",penalty:"50%",pct:50,color:"#F06292"},
-        {from:16,to:30,label:"30-16 יום",penalty:"70%",pct:70,color:T.red},
-        {from:0,to:15,label:"15 יום ומטה",penalty:"100%",pct:100,color:"#B71C1C"},
-      ],
-      soldRooms: 3, // example — rooms already sold
-      notes: "נוסע חופשי אחרי 20 נוסעים משלמים. ביטול חדר אחד מ-10+ חדרים מעל 65 יום — ללא דמי ביטול."
-    }
-  ];
+  // Load company data from localStorage (with MSC default)
+  const DEFAULT_CRUISE = [{name:"MSC Cruises",commission:"13% ממחיר הבסיס",payments:[{description:"מקדמה: $50 לנוסע (מינימום $100 לחדר) — בחתימה"},{description:"15% ממחיר ההפלגה — לא יאוחר מ-120 יום לפני ההפלגה"},{description:"50% ממחיר ההפלגה — לא יאוחר מ-65 יום לפני ההפלגה"},{description:"15% + יתרה — לא יאוחר מ-30 יום לפני ההפלגה"}],cancellation:[{days:"120+",penalty:"מקדמה בלבד ($50/נוסע)"},{days:"119-65",penalty:"15% ממחיר ההפלגה"},{days:"64-31",penalty:"50% ממחיר ההפלגה"},{days:"30-16",penalty:"70% ממחיר ההפלגה"},{days:"15 ומטה",penalty:"100% ממחיר ההפלגה"}],notes:"נוסע חופשי אחרי 20 נוסעים משלמים. ביטול חדר אחד מקבוצה של 10+ חדרים מעל 65 יום — ללא דמי ביטול. תשלומי חובה: מסי נמל $200/אדם, דמי טיפול $80/חדר, דמי שירות $84/אדם."}];
+  const cruiseCompanies = (() => { try { const d=JSON.parse(localStorage.getItem("commitment_cruise")||"[]"); return d.length?d:DEFAULT_CRUISE; } catch(e) { return DEFAULT_CRUISE; } })();
+  const airlineCompanies = (() => { try { return JSON.parse(localStorage.getItem("commitment_airline") || "[]"); } catch(e) { return []; } })();
+
+  const F_FREE  = "e3799fcad3543e1361f596e6ba63a4e93b05fb41";
+  const F_USED  = "e72bd51506f19955a82bc8073b6478cf69e50bbb";
+  const F_TOTAL = "8037c7753cb6e2aa2c8088c90f71139df06e6116";
+  const F_DEPARTURE = "cfe03801231d2fbc0afc5bde16025716fd240099";
+  const MIN_DATE = "2026-01-01";
+
+  // Parse and aggregate products by trip code
+  const tripMap = {};
+  (products || []).forEach(p => {
+    const parts = (p.name || "").split("-");
+    const code = parts[0] || "";
+    const free = Number(p[F_FREE]) || Number(p.quantity_available) || 0;
+    const used = Number(p[F_USED]) || Number(p.quantity_used) || 0;
+    const total = Number(p[F_TOTAL]) || free + used;
+    const dep = p[F_DEPARTURE] || "";
+    if (!dep || dep < MIN_DATE) return;
+    if (!tripMap[code]) tripMap[code] = { code, name: codeMap[code] || "", totalRooms: 0, soldRooms: 0, freeRooms: 0, departureDate: dep };
+    tripMap[code].totalRooms += total;
+    tripMap[code].soldRooms += used;
+    tripMap[code].freeRooms += free;
+    if (dep < tripMap[code].departureDate) tripMap[code].departureDate = dep;
+  });
+
+  const trips = Object.values(tripMap).sort((a, b) => a.departureDate.localeCompare(b.departureDate));
+
+  const fmtDate = ds => { if (!ds) return "–"; const d = new Date(ds); if (isNaN(d)) return ds; return d.toLocaleDateString("he-IL", {day:"2-digit",month:"2-digit",year:"numeric"}); };
+  const diffDays = ds => Math.ceil((new Date(ds) - new Date()) / 86400000);
+
+  function updateSelection(code, field, value) {
+    const next = { ...selections, [code]: { ...(selections[code] || {}), [field]: value } };
+    setSelections(next);
+    try { localStorage.setItem("commitment_selections", JSON.stringify(next)); } catch(e) {}
+  }
+
+  const totalRooms = trips.reduce((s, t) => s + t.totalRooms, 0);
+  const totalSold = trips.reduce((s, t) => s + t.soldRooms, 0);
+  const totalFree = trips.reduce((s, t) => s + t.freeRooms, 0);
 
   return <div>
-    {commitments.map(c => {
-      const daysToDepart = diffDays(c.departureDate);
-      const daysToOption = diffDays(c.optionDeadline);
-      const totalRooms = c.rooms.reduce((s,r) => s + r.qty, 0);
-      const totalPax = c.rooms.reduce((s,r) => s + r.qty * r.pax, 0);
-      const totalBase = c.rooms.reduce((s,r) => s + r.qty * r.pricePerPax * r.pax, 0);
-      const totalPortTax = totalPax * c.portTax;
-      const totalHandling = totalRooms * c.handlingFee;
-      const totalService = totalPax * c.serviceFee;
-      const totalObligatory = totalPortTax + totalHandling + totalService;
-      const totalPrice = totalBase + totalObligatory;
-      const commissionAmt = totalBase * c.commission;
-      const netCost = totalPrice - commissionAmt;
-      const roomsLeft = totalRooms - c.soldRooms;
-      const soldPct = Math.round(c.soldRooms / totalRooms * 100);
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
+      <Kpi label="🗺️ טיולים" value={trips.length} delta="עם תאריך יציאה"/>
+      <Kpi label="🚪 סה״כ חדרים" value={totalRooms}/>
+      <Kpi label="✅ נמכרו" value={totalSold} color={T.teal} dc={T.teal}/>
+      <Kpi label="⏳ נשארו למכירה" value={totalFree} color={T.gold} dc={T.gold}/>
+    </div>
 
-      // Current cancellation zone
-      const currentZone = c.cancellation.find(z => daysToDepart >= z.from && daysToDepart <= z.to) || c.cancellation[c.cancellation.length-1];
-      const penaltyAmount = currentZone.pct > 0 ? Math.round(totalPrice * currentZone.pct / 100) : 1400;
+    {cruiseCompanies.length === 0 && airlineCompanies.length === 0 && <Alert type="gold">⚠️ טרם הוגדרו חברות שייט/תעופה. <a href="commitments.html" style={{color:T.teal,fontWeight:600}}>לחץ כאן להגדרה</a></Alert>}
 
-      // Next payment
-      const nextPayment = c.payments.find(p => p.status === "pending" && p.dueDate);
-      const daysToNextPayment = nextPayment ? diffDays(nextPayment.dueDate) : null;
+    <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
+      <a href="commitments.html" style={{fontSize:11,color:T.teal,textDecoration:"none",padding:"5px 12px",borderRadius:6,border:"1px solid rgba(29,184,160,.2)",background:"rgba(29,184,160,.08)"}}>⚙️ ניהול חברות</a>
+    </div>
 
-      return <div key={c.id}>
-        {/* Alerts */}
-        {daysToOption > 0 && daysToOption <= 30 && <Alert type="gold">⏰ תקופת האופציה מסתיימת בעוד {daysToOption} ימים ({c.optionDeadline.split("-").reverse().join("/")})</Alert>}
-        {daysToNextPayment !== null && daysToNextPayment <= 14 && daysToNextPayment > 0 && <Alert type="red">💳 תשלום הבא בעוד {daysToNextPayment} ימים! ({nextPayment.dueDate.split("-").reverse().join("/")})</Alert>}
+    <div style={card}>
+      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+        <thead><tr>
+          {["שם המוצר","תאריך יציאה","חדרים","נמכרו","נשאר","חברת שייט","תנאי שייט","חברת תעופה","תנאי תעופה"].map(h=>
+            <th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"6px 8px 8px",borderBottom:"1px solid "+T.border,fontSize:10,whiteSpace:"nowrap"}}>{h}</th>
+          )}
+        </tr></thead>
+        <tbody>
+          {trips.length === 0 && <tr><td colSpan={9} style={{textAlign:"center",color:T.muted,padding:"2rem"}}>אין מוצרים</td></tr>}
+          {trips.map(t => {
+            const sel = selections[t.code] || {};
+            const selectedCruise = cruiseCompanies.find(c => c.name === sel.cruise);
+            const selectedAirline = airlineCompanies.find(c => c.name === sel.airline);
+            const daysLeft = diffDays(t.departureDate);
+            const freeColor = t.freeRooms === 0 ? T.teal : t.freeRooms <= 3 ? T.gold : T.muted;
 
-        {/* Header */}
-        <SecDiv color={T.gold}>{c.company} — {c.ship}</SecDiv>
-        <div style={{...card,marginBottom:10}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
-            <div>
-              <div style={{fontSize:16,fontWeight:700,color:"#F0F4F8"}}>{c.ship}</div>
-              <div style={{fontSize:12,color:T.muted,marginTop:2}}>🚢 {c.route}</div>
-              <div style={{fontSize:12,color:T.muted}}>📅 {c.departureDate.split("-").reverse().join("/")}</div>
-            </div>
-            <div style={{display:"flex",gap:10,alignItems:"center"}}>
-              <div style={{textAlign:"center",padding:"8px 16px",background:"rgba(29,184,160,.08)",borderRadius:8}}>
-                <div style={{fontSize:22,fontWeight:700,color:daysToDepart>90?T.teal:daysToDepart>30?T.gold:T.red}}>{daysToDepart}</div>
-                <div style={{fontSize:10,color:T.muted}}>ימים להפלגה</div>
-              </div>
-              {daysToOption > 0 && <div style={{textAlign:"center",padding:"8px 16px",background:"rgba(240,180,41,.08)",borderRadius:8}}>
-                <div style={{fontSize:22,fontWeight:700,color:daysToOption>30?T.gold:T.red}}>{daysToOption}</div>
-                <div style={{fontSize:10,color:T.muted}}>ימים לאופציה</div>
-              </div>}
-            </div>
-          </div>
-        </div>
+            return <React.Fragment key={t.code}>
+              <tr style={{borderBottom:"1px solid "+T.border,cursor:"pointer"}} onClick={()=>setExpandedRow(expandedRow===t.code?null:t.code)}>
+                <td style={{padding:"8px"}}>
+                  <div style={{fontWeight:600,color:"#F0F4F8"}}>{t.code}</div>
+                  {t.name && <div style={{fontSize:10,color:T.muted}}>{t.name}</div>}
+                </td>
+                <td style={{padding:"8px",fontSize:11,color:T.muted,whiteSpace:"nowrap"}}>
+                  {fmtDate(t.departureDate)}
+                  <div style={{fontSize:10,color:daysLeft>90?T.teal:daysLeft>30?T.gold:T.red}}>{daysLeft} ימים</div>
+                </td>
+                <td style={{padding:"8px",fontWeight:600,color:"#F0F4F8"}}>{t.totalRooms}</td>
+                <td style={{padding:"8px",fontWeight:600,color:T.teal}}>{t.soldRooms}</td>
+                <td style={{padding:"8px",fontWeight:600,color:freeColor}}>{t.freeRooms}</td>
+                <td style={{padding:"8px"}} onClick={e=>e.stopPropagation()}>
+                  <select value={sel.cruise||""} onChange={e=>updateSelection(t.code,"cruise",e.target.value)}
+                    style={{background:T.navy,border:"1px solid "+T.border,color:sel.cruise?"#F0F4F8":T.muted,fontSize:11,padding:"4px 6px",borderRadius:6,cursor:"pointer",width:"100%",minWidth:90}}>
+                    <option value="">בחר...</option>
+                    {cruiseCompanies.map(c=><option key={c.name} value={c.name}>{c.name}</option>)}
+                  </select>
+                </td>
+                <td style={{padding:"8px",fontSize:11,color:T.muted}}>
+                  {selectedCruise ? <span style={{cursor:"pointer",color:T.teal}} onClick={e=>{e.stopPropagation();setExpandedRow(expandedRow===t.code?null:t.code);}}>📋 לחץ לצפייה</span> : "–"}
+                </td>
+                <td style={{padding:"8px"}} onClick={e=>e.stopPropagation()}>
+                  <select value={sel.airline||""} onChange={e=>updateSelection(t.code,"airline",e.target.value)}
+                    style={{background:T.navy,border:"1px solid "+T.border,color:sel.airline?"#F0F4F8":T.muted,fontSize:11,padding:"4px 6px",borderRadius:6,cursor:"pointer",width:"100%",minWidth:90}}>
+                    <option value="">בחר...</option>
+                    {airlineCompanies.map(c=><option key={c.name} value={c.name}>{c.name}</option>)}
+                  </select>
+                </td>
+                <td style={{padding:"8px",fontSize:11,color:T.muted}}>
+                  {selectedAirline ? <span style={{cursor:"pointer",color:"#A89AFF"}} onClick={e=>{e.stopPropagation();setExpandedRow(expandedRow===t.code?null:t.code);}}>📋 לחץ לצפייה</span> : "–"}
+                </td>
+              </tr>
 
-        {/* KPIs */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
-          <Kpi label="🚪 חדרים" value={totalRooms} delta={totalPax+" נוסעים"}/>
-          <Kpi label="💵 סה״כ התחייבות" value={"$"+totalPrice.toLocaleString()} color={T.gold}/>
-          <Kpi label="🏷️ עמלה (13%)" value={"$"+Math.round(commissionAmt).toLocaleString()} color={T.teal} dc={T.teal}/>
-          <Kpi label="💰 עלות נטו" value={"$"+Math.round(netCost).toLocaleString()} color="#7B68EE"/>
-        </div>
+              {/* Expanded details */}
+              {expandedRow === t.code && (selectedCruise || selectedAirline) && <tr><td colSpan={9} style={{padding:"12px 16px",background:"rgba(255,255,255,.02)"}}>
+                <div style={{display:"grid",gridTemplateColumns:selectedCruise&&selectedAirline?"1fr 1fr":"1fr",gap:14}}>
+                  {selectedCruise && <div style={{background:T.navyCard,borderRadius:10,padding:14,border:"1px solid "+T.border}}>
+                    <div style={{fontSize:12,fontWeight:700,color:"#5BB8F0",marginBottom:8}}>🚢 {selectedCruise.name}</div>
+                    {selectedCruise.commission && <div style={{fontSize:11,color:T.muted,marginBottom:6}}>עמלה: <strong style={{color:T.teal}}>{selectedCruise.commission}</strong></div>}
+                    {selectedCruise.payments && selectedCruise.payments.length > 0 && <div style={{marginBottom:8}}>
+                      <div style={{fontSize:10,color:T.muted,fontWeight:600,marginBottom:4}}>תנאי תשלום:</div>
+                      {selectedCruise.payments.map((p,i) => <div key={i} style={{fontSize:11,color:"#F0F4F8",padding:"3px 0",borderBottom:"1px solid "+T.border}}>💳 {p.description}</div>)}
+                    </div>}
+                    {selectedCruise.cancellation && selectedCruise.cancellation.length > 0 && <div style={{marginBottom:8}}>
+                      <div style={{fontSize:10,color:T.muted,fontWeight:600,marginBottom:4}}>דמי ביטול:</div>
+                      {selectedCruise.cancellation.map((z,i) => {
+                        const inZone = daysLeft <= parseInt(z.days);
+                        return <div key={i} style={{fontSize:11,color:inZone?T.red:"#F0F4F8",fontWeight:inZone?700:400,padding:"3px 0",borderBottom:"1px solid "+T.border}}>
+                          {inZone?"👉 ":""}{z.days} יום: {z.penalty}
+                        </div>;
+                      })}
+                    </div>}
+                    {selectedCruise.notes && <div style={{fontSize:11,color:T.muted,marginTop:6}}>{selectedCruise.notes}</div>}
+                  </div>}
 
-        {/* Sales Progress */}
-        <div style={{...card,marginBottom:10}}>
-          <div style={ct}>התקדמות מכירות</div>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <div style={{flex:1}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-                <span style={{fontSize:12,color:"#F0F4F8",fontWeight:600}}>נמכרו {c.soldRooms} מתוך {totalRooms} חדרים</span>
-                <span style={{fontSize:12,fontWeight:700,color:soldPct>=70?T.teal:soldPct>=40?T.gold:T.red}}>{soldPct}%</span>
-              </div>
-              <div style={{height:16,background:"rgba(255,255,255,.06)",borderRadius:8,overflow:"hidden"}}>
-                <div style={{width:soldPct+"%",height:"100%",background:soldPct>=70?T.teal:soldPct>=40?T.gold:T.red,borderRadius:8,transition:"width .5s"}}/>
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between",marginTop:6}}>
-                <span style={{fontSize:11,color:T.teal}}>✅ נמכרו: {c.soldRooms}</span>
-                <span style={{fontSize:11,color:T.gold}}>⏳ נשארו: {roomsLeft}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Rooms Detail */}
-        <div style={{...card,marginBottom:10}}>
-          <div style={ct}>פירוט חדרים</div>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-            <thead><tr>
-              {["קטגוריה","תיאור","כמות","מחיר/נוסע","נוסעים","סה״כ בסיס","תשלומי חובה","סה״כ"].map(h=>
-                <th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"4px 8px 8px",borderBottom:"1px solid "+T.border,fontSize:10}}>{h}</th>
-              )}
-            </tr></thead>
-            <tbody>{c.rooms.map((r,i)=>{
-              const roomBase = r.qty * r.pricePerPax * r.pax;
-              const roomPax = r.qty * r.pax;
-              const roomOblig = roomPax * c.portTax + r.qty * c.handlingFee + roomPax * c.serviceFee;
-              return <tr key={i} style={{borderBottom:"1px solid "+T.border}}>
-                <td style={{padding:"7px 8px"}}><span style={{fontSize:11,padding:"2px 8px",borderRadius:10,background:"rgba(123,104,238,.1)",color:"#9B8FFF",fontWeight:600}}>{r.cat}</span></td>
-                <td style={{padding:"7px 8px",color:"#F0F4F8",fontSize:11}}>{r.desc}</td>
-                <td style={{padding:"7px 8px",color:T.muted,fontWeight:600}}>{r.qty}</td>
-                <td style={{padding:"7px 8px",color:T.gold,fontWeight:600}}>${r.pricePerPax.toLocaleString()}</td>
-                <td style={{padding:"7px 8px",color:T.muted}}>{roomPax}</td>
-                <td style={{padding:"7px 8px",color:"#F0F4F8",fontWeight:600}}>${roomBase.toLocaleString()}</td>
-                <td style={{padding:"7px 8px",color:T.muted}}>${roomOblig.toLocaleString()}</td>
-                <td style={{padding:"7px 8px",color:T.teal,fontWeight:700}}>${(roomBase+roomOblig).toLocaleString()}</td>
-              </tr>;
-            })}</tbody>
-            <tr style={{borderTop:"2px solid "+T.border}}>
-              <td colSpan={5} style={{padding:"8px",fontWeight:700,fontSize:12,color:"#F0F4F8"}}>סה״כ</td>
-              <td style={{padding:"8px",fontWeight:700,color:"#F0F4F8"}}>${totalBase.toLocaleString()}</td>
-              <td style={{padding:"8px",fontWeight:700,color:T.muted}}>${totalObligatory.toLocaleString()}</td>
-              <td style={{padding:"8px",fontWeight:700,color:T.teal}}>${totalPrice.toLocaleString()}</td>
-            </tr>
-          </table>
-        </div>
-
-        {/* Payment Schedule + Cancellation side by side */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-          {/* Payments */}
-          <div style={card}>
-            <div style={ct}>לוח תשלומים</div>
-            {c.payments.map((p,i) => {
-              const daysLeft = p.dueDate ? diffDays(p.dueDate) : null;
-              const urgent = daysLeft !== null && daysLeft <= 14 && daysLeft > 0;
-              const overdue = daysLeft !== null && daysLeft <= 0 && p.status !== "paid";
-              return <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid "+T.border}}>
-                <div>
-                  <div style={{fontSize:12,fontWeight:600,color:"#F0F4F8"}}>{p.name}</div>
-                  <div style={{fontSize:11,color:T.muted}}>
-                    {p.dueDate ? "עד "+p.dueDate.split("-").reverse().join("/") : p.due}
-                    {daysLeft !== null && daysLeft > 0 && <span style={{marginRight:6,color:urgent?T.red:T.muted}}> ({daysLeft} ימים)</span>}
-                  </div>
+                  {selectedAirline && <div style={{background:T.navyCard,borderRadius:10,padding:14,border:"1px solid "+T.border}}>
+                    <div style={{fontSize:12,fontWeight:700,color:"#A89AFF",marginBottom:8}}>✈️ {selectedAirline.name}</div>
+                    {selectedAirline.terms && <div style={{fontSize:11,color:"#F0F4F8",marginBottom:8,lineHeight:1.7}}>{selectedAirline.terms}</div>}
+                    {selectedAirline.cancellation && selectedAirline.cancellation.length > 0 && <div style={{marginBottom:8}}>
+                      <div style={{fontSize:10,color:T.muted,fontWeight:600,marginBottom:4}}>דמי ביטול:</div>
+                      {selectedAirline.cancellation.map((z,i) => {
+                        const inZone = daysLeft <= parseInt(z.days);
+                        return <div key={i} style={{fontSize:11,color:inZone?T.red:"#F0F4F8",fontWeight:inZone?700:400,padding:"3px 0",borderBottom:"1px solid "+T.border}}>
+                          {inZone?"👉 ":""}{z.days} יום: {z.penalty}
+                        </div>;
+                      })}
+                    </div>}
+                    {selectedAirline.notes && <div style={{fontSize:11,color:T.muted,marginTop:6}}>{selectedAirline.notes}</div>}
+                  </div>}
                 </div>
-                <span style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:20,
-                  background: p.status==="paid" ? "rgba(29,184,160,.15)" : overdue ? "rgba(232,72,85,.15)" : urgent ? "rgba(240,180,41,.15)" : "rgba(255,255,255,.06)",
-                  color: p.status==="paid" ? T.teal : overdue ? T.red : urgent ? T.gold : T.muted
-                }}>
-                  {p.status==="paid" ? "✅ שולם" : overdue ? "❗ באיחור" : "⏳ ממתין"}
-                </span>
-              </div>;
-            })}
-          </div>
-
-          {/* Cancellation */}
-          <div style={card}>
-            <div style={ct}>דמי ביטול — איפה אתה עכשיו?</div>
-            {c.cancellation.map((z,i) => {
-              const isCurrent = daysToDepart >= z.from && daysToDepart <= z.to;
-              return <div key={i} style={{
-                display:"flex",justifyContent:"space-between",alignItems:"center",
-                padding:"8px 10px",marginBottom:4,borderRadius:6,
-                background: isCurrent ? z.color+"20" : "transparent",
-                border: isCurrent ? "1px solid "+z.color : "1px solid transparent",
-              }}>
-                <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  {isCurrent && <span style={{fontSize:14}}>👉</span>}
-                  <div>
-                    <div style={{fontSize:12,fontWeight:isCurrent?700:400,color:isCurrent?"#F0F4F8":T.muted}}>{z.label}</div>
-                    <div style={{fontSize:10,color:T.muted}}>{z.penalty}</div>
-                  </div>
-                </div>
-                <span style={{fontSize:13,fontWeight:700,color:z.color}}>{z.pct > 0 ? z.pct+"%" : "מקדמה"}</span>
-              </div>;
-            })}
-            <div style={{marginTop:8,padding:"8px 10px",background:"rgba(255,255,255,.04)",borderRadius:6}}>
-              <div style={{fontSize:11,color:T.muted}}>דמי ביטול נוכחיים (כל החדרים):</div>
-              <div style={{fontSize:18,fontWeight:700,color:currentZone.color}}>${penaltyAmount.toLocaleString()}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Notes */}
-        {c.notes && <div style={{...card,marginBottom:10}}>
-          <div style={ct}>הערות</div>
-          <div style={{fontSize:12,color:T.muted,lineHeight:1.8}}>{c.notes}</div>
-        </div>}
-      </div>;
-    })}
+              </td></tr>}
+            </React.Fragment>;
+          })}
+        </tbody>
+      </table>
+    </div>
   </div>;
 }
 
@@ -1225,6 +1165,7 @@ function App() {
           style={{background:"transparent",border:"1px solid "+T.border,color:T.muted,fontSize:12,padding:"5px 12px",borderRadius:6,cursor:"pointer"}}>
           {loading?"...":"↻ רענן"}
         </button>
+        <a href="commitments.html" style={{background:"rgba(240,180,41,.1)",border:"1px solid rgba(240,180,41,.2)",color:T.gold,fontSize:12,padding:"5px 12px",borderRadius:6,textDecoration:"none"}}>💼 ניהול התחייבויות</a>
         <a href="codes.html" style={{background:"rgba(29,184,160,.1)",border:"1px solid rgba(29,184,160,.2)",color:T.teal,fontSize:12,padding:"5px 12px",borderRadius:6,textDecoration:"none"}}>⚙️ קודי טיולים</a>
       </div>
     </div>
@@ -1372,7 +1313,7 @@ function App() {
           </div>;
         }
 
-        if(tab==="commitments") return <CommitmentsTab/>;
+        if(tab==="commitments") return <CommitmentsTab products={products} codeMap={codeMap}/>;
         if(tab==="seo") return <SeoTab/>;
         if(tab==="ads") return <AdsTab won={won} fromStr={fromStr} toStr={toStr} label={label}/>;
 
