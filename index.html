@@ -1099,6 +1099,139 @@ function CommitmentsTab({products, codeMap}) {
   </div>;
 }
 
+function MainTabInner({open, won, pVal, sm, um, calls, acOK}) {
+  const [days, setDays] = useState("this_month");
+  const {fromStr,toStr,label} = calcRange(days);
+  const newDeals = open.filter(d=>d.add_time&&d.add_time.substring(0,10)>=fromStr&&d.add_time.substring(0,10)<=toStr);
+  const recW = won.filter(x=>x.won_time&&x.won_time.substring(0,10)>=fromStr&&x.won_time.substring(0,10)<=toStr);
+  const fCalls = filterCalls(calls, fromStr, toStr);
+  const ib = fCalls.filter(c=>c.direction==="inbound");
+  const ob = fCalls.filter(c=>c.direction==="outbound");
+  const ms = fCalls.filter(c=>c.missed===true||c.status==="missed"||(c.direction==="inbound"&&c.answered===false)||(c.direction==="inbound"&&!c.duration));
+  const ans = fCalls.filter(c=>c.answered===true||(c.duration>0&&c.status!=="missed"));
+  const dur = ans.length?Math.round(ans.reduce((s,c)=>s+(c.duration||0),0)/ans.length):0;
+  const rate = fCalls.length?Math.round((fCalls.length-ms.length)/fCalls.length*100):0;
+  const stuck = open.filter(x=>daysIn(x)>14).length;
+
+  return <div>
+    <div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}><DateFilter value={days} onChange={setDays}/></div>
+    {stuck>0&&<Alert type="red">⚠️ {stuck} עסקאות תקועות מעל 14 ימים</Alert>}
+    <SecDiv>Pipedrive – סיכום</SecDiv>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
+      <Kpi label="📋 עסקאות חדשות" value={newDeals.length} delta={label}/>
+      <Kpi label="📂 עסקאות פתוחות" value={open.length} delta="סה״כ ב-pipeline"/>
+      <Kpi label="✅ נסגרו" value={recW.length} delta={label} dc={T.teal}/>
+      <Kpi label="💰 ערך pipeline" value={fmt(pVal)} color={T.gold} dc={T.gold}/>
+    </div>
+    <SecDiv color={T.gold}>Aircall – שיחות</SecDiv>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
+      <Kpi label="📞 סה״כ שיחות" value={acOK?fCalls.length:"–"} delta={label}/>
+      <Kpi label="📲 נכנסות" value={acOK?ib.length:"–"} dc={T.teal}/>
+      <Kpi label="📤 יוצאות" value={acOK?ob.length:"–"} color={T.gold}/>
+      <Kpi label="🔕 לא נענו" value={acOK?ms.length:"–"} delta={"מענה "+rate+"%"} color={T.red} dc={T.red}/>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:10}}>
+      <div style={card}><div style={ct}>משפך מכירות</div><Funnel open={open} sm={sm}/></div>
+      <div style={card}><div style={ct}>שיחות Aircall</div><Donut calls={fCalls} ib={ib} ob={ob} ms={ms} dur={dur} rate={rate} ok={acOK}/></div>
+      <div style={card}><div style={ct}>ערך לפי שלב</div>
+        {(()=>{const sv={};open.forEach(x=>{const n=sm[x.stage_id]||"אחר";sv[n]=(sv[n]||0)+(Number(x.value)||0);});
+        return Object.entries(sv).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([n,v])=>
+          <div key={n} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid "+T.border}}>
+            <span style={{fontSize:11,color:T.muted}}>{n.substring(0,18)}</span>
+            <span style={{fontSize:12,fontWeight:600,color:T.teal}}>{fmt(v)}</span>
+          </div>)})()}
+      </div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+      <div style={card}><div style={ct}>נציגים – פתוחות וסגירות</div><AgentStats open={open} won={recW} um={um}/></div>
+      <div style={card}><div style={ct}>נסגרו לאחרונה</div>
+        {won.sort((a,b)=>new Date(b.won_time||0)-new Date(a.won_time||0)).slice(0,5).map(x=>{
+          const tripCode=x[F_TOUR_CODE]||"";
+          return <div key={x.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid "+T.border}}>
+            <div><div style={{fontSize:11,color:T.muted}}>{(x.title||"").substring(0,28)}</div>
+              {tripCode&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:10,background:"rgba(123,104,238,.1)",color:"#9B8FFF",marginTop:2,display:"inline-block"}}>{tripCode}</span>}
+            </div>
+            <span style={{fontSize:12,fontWeight:600,color:T.teal}}>{fmt(x.value)}</span>
+          </div>;
+        })}
+        {!won.length&&<div style={{color:T.muted,fontSize:12}}>אין עסקאות</div>}
+      </div>
+    </div>
+  </div>;
+}
+
+function AircallTabInner({allCalls}) {
+  const [days, setDays] = useState("this_month");
+  const {fromStr,toStr,label} = calcRange(days);
+  const calls = filterCalls(allCalls, fromStr, toStr);
+  const ib = calls.filter(c=>c.direction==="inbound");
+  const ob = calls.filter(c=>c.direction==="outbound");
+  const ms = calls.filter(c=>c.missed===true||c.status==="missed"||(c.direction==="inbound"&&c.answered===false)||(c.direction==="inbound"&&!c.duration));
+  const ans = calls.filter(c=>c.answered===true||(c.duration>0&&c.status!=="missed"));
+  const dur = ans.length?Math.round(ans.reduce((s,c)=>s+(c.duration||0),0)/ans.length):0;
+  const rate = calls.length?Math.round((calls.length-ms.length)/calls.length*100):0;
+
+  const agentStats={};
+  calls.forEach(c=>{const name=c.user?.name||c.user?.email||"לא ידוע";if(!agentStats[name])agentStats[name]={name,total:0,inbound:0,outbound:0,missed:0,duration:0,answered:0};agentStats[name].total++;if(c.direction==="inbound")agentStats[name].inbound++;if(c.direction==="outbound")agentStats[name].outbound++;const isMissed=c.missed===true||c.status==="missed"||(c.direction==="inbound"&&c.answered===false)||(c.direction==="inbound"&&!c.duration);if(isMissed)agentStats[name].missed++;else{agentStats[name].answered++;agentStats[name].duration+=(c.duration||0);}});
+  const agentArr=Object.values(agentStats).sort((a,b)=>b.total-a.total);
+  const hourStats=Array(24).fill(0);calls.forEach(c=>{const h=new Date((c.started_at||c.created_at||0)*1000).getHours();hourStats[h]++;});const maxHour=Math.max(...hourStats,1);
+  const missedCalls=ms;
+
+  return <div>
+    <div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}><DateFilter value={days} onChange={setDays}/></div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
+      <Kpi label="📞 סה״כ שיחות" value={calls.length} delta={label}/><Kpi label="📲 נכנסות" value={ib.length} color={T.teal} dc={T.teal}/><Kpi label="📤 יוצאות" value={ob.length} color={T.gold} dc={T.gold}/><Kpi label="🔕 לא נענו" value={ms.length} delta={"מענה "+rate+"%"} color={T.red} dc={T.red}/>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:10}}>
+      <Kpi label="⏱️ משך ממוצע" value={mmss(dur)} delta="שיחות שנענו"/><Kpi label="✅ שיחות שנענו" value={calls.length-ms.length} color={T.teal}/><Kpi label="📊 שיעור מענה" value={rate+"%"} color={rate>=80?T.teal:T.gold} dc={rate>=80?T.teal:T.gold}/>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+      <div style={card}><div style={ct}>ביצועים לפי נציג</div>{agentArr.length===0?<div style={{color:T.muted,fontSize:12}}>אין נתונים</div>:<table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr>{["נציג","סה״כ","נכנסות","יוצאות","לא נענו","מענה %"].map(h=><th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"4px 6px 8px",borderBottom:"1px solid "+T.border,fontSize:10}}>{h}</th>)}</tr></thead><tbody>{agentArr.map((a,i)=><tr key={a.name} style={{borderBottom:"1px solid "+T.border}}><td style={{padding:"7px 6px",fontWeight:600,fontSize:11}}>{a.name.split(" ")[0]||a.name}</td><td style={{padding:"7px 6px",color:T.muted}}>{a.total}</td><td style={{padding:"7px 6px",color:T.teal}}>{a.inbound}</td><td style={{padding:"7px 6px",color:T.gold}}>{a.outbound}</td><td style={{padding:"7px 6px",color:a.missed>0?T.red:T.muted}}>{a.missed}</td><td style={{padding:"7px 6px"}}><span style={{fontSize:11,fontWeight:600,color:a.total>0&&(a.total-a.missed)/a.total>=0.8?T.teal:T.gold}}>{a.total>0?Math.round((a.total-a.missed)/a.total*100):0}%</span></td></tr>)}</tbody></table>}</div>
+      <div style={card}><div style={ct}>שיחות לא נענו ({missedCalls.length})</div>{missedCalls.length===0?<div style={{color:T.muted,fontSize:12}}>אין שיחות שלא נענו 🎉</div>:<div style={{maxHeight:220,overflowY:"auto"}}>{missedCalls.slice(0,20).map((c,i)=>{const ts=new Date((c.started_at||c.created_at||0)*1000);const timeStr=ts.toLocaleTimeString("he-IL",{hour:"2-digit",minute:"2-digit"});const dateStr=ts.toLocaleDateString("he-IL",{day:"2-digit",month:"2-digit"});const num=c.raw_digits||c.from||c.number||"–";return <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid "+T.border}}><div><div style={{fontSize:12,color:"#F0F4F8",fontWeight:500}}>{String(num).substring(0,16)}</div><div style={{fontSize:10,color:T.muted}}>{dateStr} {timeStr}</div></div><span style={{fontSize:10,padding:"2px 8px",borderRadius:10,background:"rgba(232,72,85,.15)",color:T.red}}>לא נענה</span></div>;})}</div>}</div>
+    </div>
+    <div style={{...card,marginBottom:10}}><div style={ct}>עומס לפי שעה ביום</div><div style={{display:"flex",gap:3,alignItems:"flex-end",height:80}}>{hourStats.map((count,h)=>(<div key={h} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}><div style={{width:"100%",background:count>0?T.teal:"rgba(255,255,255,.05)",borderRadius:"3px 3px 0 0",height:count>0?`${Math.round(count/maxHour*64)+4}px`:"4px",transition:"height .3s"}}/>{h%4===0&&<div style={{fontSize:9,color:T.muted}}>{h}:00</div>}</div>))}</div></div>
+    <div style={card}><div style={ct}>רשימת שיחות ({calls.length})</div><div style={{maxHeight:300,overflowY:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr>{["מספר","כיוון","סטטוס","משך","שעה","נציג"].map(h=><th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"4px 6px 8px",borderBottom:"1px solid "+T.border,fontSize:10,position:"sticky",top:0,background:T.navyCard}}>{h}</th>)}</tr></thead><tbody>{calls.slice(0,50).map((c,i)=>{const isMissed=c.missed===true||c.status==="missed"||(c.direction==="inbound"&&c.answered===false)||(c.direction==="inbound"&&!c.duration);const ts=new Date((c.started_at||c.created_at||0)*1000);const timeStr=ts.toLocaleString("he-IL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});const num=c.raw_digits||c.from||c.number||"–";const agentName=(c.user?.name||c.user?.email||"–").split(" ")[0];return <tr key={i} style={{borderBottom:"1px solid "+T.border}}><td style={{padding:"6px",fontSize:11}}>{String(num).substring(0,16)}</td><td style={{padding:"6px"}}><span style={{fontSize:10,color:c.direction==="inbound"?T.teal:T.gold}}>{c.direction==="inbound"?"נכנסת":"יוצאת"}</span></td><td style={{padding:"6px"}}><span style={{fontSize:10,padding:"2px 6px",borderRadius:8,background:isMissed?"rgba(232,72,85,.15)":"rgba(29,184,160,.15)",color:isMissed?T.red:T.teal}}>{isMissed?"לא נענה":"נענה"}</span></td><td style={{padding:"6px",color:T.muted}}>{c.duration?mmss(c.duration):"–"}</td><td style={{padding:"6px",color:T.muted,fontSize:10}}>{timeStr}</td><td style={{padding:"6px",color:T.muted}}>{agentName}</td></tr>;})}</tbody></table></div></div>
+  </div>;
+}
+
+function AdsTabWrapper({won}) {
+  const [days, setDays] = useState("this_month");
+  const {fromStr,toStr,label} = calcRange(days);
+  return <div>
+    <div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}><DateFilter value={days} onChange={v=>setDays(v)}/></div>
+    <AdsTab won={won} fromStr={fromStr} toStr={toStr} label={label}/>
+  </div>;
+}
+
+function calcRange(days) {
+  const today=new Date();const isoDate=d=>d.toISOString().split("T")[0];const todayStr=isoDate(today);
+  if(days==="today") return {fromStr:todayStr,toStr:todayStr,label:"היום"};
+  if(days==="yesterday"){const y=new Date(today);y.setDate(y.getDate()-1);return{fromStr:isoDate(y),toStr:isoDate(y),label:"אתמול"};}
+  if(days==="this_week"){const d=new Date(today);d.setDate(d.getDate()-d.getDay());return{fromStr:isoDate(d),toStr:todayStr,label:"השבוע"};}
+  if(days==="last_week"){const end=new Date(today);end.setDate(end.getDate()-end.getDay()-1);const start=new Date(end);start.setDate(start.getDate()-6);return{fromStr:isoDate(start),toStr:isoDate(end),label:"שבוע שעבר"};}
+  if(days==="this_month") return{fromStr:todayStr.substring(0,7)+"-01",toStr:todayStr,label:"החודש"};
+  if(days==="last_month"){const d=new Date(today.getFullYear(),today.getMonth()-1,1);const de=new Date(today.getFullYear(),today.getMonth(),0);return{fromStr:isoDate(d),toStr:isoDate(de),label:"חודש שעבר"};}
+  const p=new Date(today);p.setDate(p.getDate()-Number(days||30));return{fromStr:isoDate(p),toStr:todayStr,label:days+" ימים"};
+}
+
+function DateFilter({value, onChange}) {
+  return <select value={value} onChange={e=>onChange(e.target.value)}
+    style={{background:T.navyCard,border:"1px solid "+T.border,color:"#F0F4F8",fontSize:12,padding:"5px 10px",borderRadius:6,cursor:"pointer"}}>
+    <option value="today">היום</option>
+    <option value="yesterday">אתמול</option>
+    <option value="this_week">השבוע הזה</option>
+    <option value="last_week">שבוע שעבר</option>
+    <option value="this_month">החודש הזה</option>
+    <option value="last_month">חודש שעבר</option>
+    <option value="7">7 ימים אחרונים</option>
+    <option value="90">רבעון</option>
+  </select>;
+}
+
+function filterCalls(calls, fromStr, toStr) {
+  return (calls||[]).filter(c=>{const ts=new Date((c.started_at||c.created_at||0)*1000).toISOString().split("T")[0];return ts>=fromStr&&ts<=toStr;});
+}
+
 function SeoTab() {
   // Demo data
   const demoQueries = [
@@ -1236,7 +1369,6 @@ function SeoTab() {
 
 function App() {
   const [tab,setTab]         = useState("daily");
-  const [days,setDays]       = useState("this_month");
   const [loading,setLoading] = useState(true);
   const [status,setStatus]   = useState("טוען...");
   const [data,setData]       = useState(null);
@@ -1257,17 +1389,11 @@ function App() {
     const today=new Date();
     const todayStr=today.toISOString().split("T")[0];
     const isoDate=d=>d.toISOString().split("T")[0];
-    let fromStr,toStr,label;
-    if(days==="today"){fromStr=todayStr;toStr=todayStr;label="היום";}
-    else if(days==="yesterday"){const y=new Date(today);y.setDate(y.getDate()-1);fromStr=isoDate(y);toStr=fromStr;label="אתמול";}
-    else if(days==="this_week"){const d=new Date(today);d.setDate(d.getDate()-d.getDay());fromStr=isoDate(d);toStr=todayStr;label="השבוע";}
-    else if(days==="last_week"){const end=new Date(today);end.setDate(end.getDate()-end.getDay()-1);const start=new Date(end);start.setDate(start.getDate()-6);fromStr=isoDate(start);toStr=isoDate(end);label="שבוע שעבר";}
-    else if(days==="this_month"){fromStr=todayStr.substring(0,7)+"-01";toStr=todayStr;label="החודש";}
-    else if(days==="last_month"){const d=new Date(today.getFullYear(),today.getMonth()-1,1);const de=new Date(today.getFullYear(),today.getMonth(),0);fromStr=isoDate(d);toStr=isoDate(de);label="חודש שעבר";}
-    else if(days===7){const p=new Date(today);p.setDate(p.getDate()-7);fromStr=isoDate(p);toStr=todayStr;label="7 ימים";}
-    else if(days===90){const p=new Date(today);p.setDate(p.getDate()-90);fromStr=isoDate(p);toStr=todayStr;label="רבעון";}
-    else{const p=new Date(today);p.setDate(p.getDate()-(days||30));fromStr=isoDate(p);toStr=todayStr;label=(days||30)+" ימים";}
-    const sinceTs=Math.floor(new Date(fromStr).getTime()/1000);
+    // Always fetch 90 days of data — each tab filters its own range
+    const p90=new Date(today);p90.setDate(p90.getDate()-90);
+    const fromStr=isoDate(p90);
+    const toStr=todayStr;
+    const sinceTs=Math.floor(p90.getTime()/1000);
     const e=[];
 
     const openDeals = await pdAll("/deals?status=all&filter_id=116295").catch(ex=>{e.push("Pipedrive פתוחות: "+ex.message);return[];});
@@ -1289,24 +1415,16 @@ function App() {
 
     const open    = deals.filter(x=>x.status==="open");
     const won     = deals.filter(x=>x.status==="won");
-    const newDeals= deals.filter(d=>d.add_time&&d.add_time.substring(0,10)>=fromStr&&d.add_time.substring(0,10)<=toStr);
-    const recW    = won.filter(x=>x.won_time&&x.won_time.substring(0,10)>=fromStr&&x.won_time.substring(0,10)<=toStr);
     const pVal    = open.reduce((s,x)=>s+(Number(x.value)||0),0);
 
     const sm={};stages.forEach(s=>sm[s.id]=s.name);
     const um={};users.forEach(u=>um[u.id]=u.name);
-    const ib  = calls.filter(c=>c.direction==="inbound");
-    const ob  = calls.filter(c=>c.direction==="outbound");
-    const ms  = calls.filter(c=>c.missed===true||c.status==="missed"||(c.direction==="inbound"&&c.answered===false)||(c.direction==="inbound"&&!c.duration));
-    const ans = calls.filter(c=>c.answered===true||(c.duration>0&&c.status!=="missed"));
-    const dur = ans.length?Math.round(ans.reduce((s,c)=>s+(c.duration||0),0)/ans.length):0;
-    const rate= calls.length?Math.round((calls.length-ms.length)/calls.length*100):0;
 
-    setData({open,won,newDeals,recW,pVal,sm,um,calls,acOK,ib,ob,ms,dur,rate,products,label,fromStr,toStr});
+    setData({open,won,pVal,sm,um,calls,acOK,products});
     setErrs(e);
     setStatus("מחובר · "+new Date().toLocaleTimeString("he-IL"));
     setLoading(false);
-  },[days]);
+  },[]);
 
   useEffect(()=>{load();},[load]);
   useEffect(()=>{const id=setInterval(load,5*60*1000);return()=>clearInterval(id);},[load]);
@@ -1322,17 +1440,6 @@ function App() {
         <span style={{fontSize:11,color:T.muted}}>{status}</span>
       </div>
       <div style={{display:"flex",gap:6,alignItems:"center"}}>
-        <select value={days} onChange={e=>setDays(e.target.value)}
-          style={{background:T.navyCard,border:"1px solid "+T.border,color:"#F0F4F8",fontSize:12,padding:"5px 10px",borderRadius:6,cursor:"pointer"}}>
-          <option value="today">היום</option>
-          <option value="yesterday">אתמול</option>
-          <option value="this_week">השבוע הזה</option>
-          <option value="last_week">שבוע שעבר</option>
-          <option value="this_month">החודש הזה</option>
-          <option value="last_month">חודש שעבר</option>
-          <option value={7}>7 ימים אחרונים</option>
-          <option value={90}>רבעון</option>
-        </select>
         <button onClick={load} disabled={loading}
           style={{background:"transparent",border:"1px solid "+T.border,color:T.muted,fontSize:12,padding:"5px 12px",borderRadius:6,cursor:"pointer"}}>
           {loading?"...":"↻ רענן"}
@@ -1354,197 +1461,23 @@ function App() {
       {errs.map((e,i)=><Alert key={i} type="gold">⚠️ {e}</Alert>)}
 
       {data&&(()=>{
-        const {open,won,newDeals,recW,pVal,sm,um,calls,acOK,ib,ob,ms,dur,rate,products,label,fromStr,toStr}=data;
-        const stuck=open.filter(x=>daysIn(x)>14).length;
+        const {open,won,pVal,sm,um,calls,acOK,products}=data;
 
-        if(tab==="daily") return <DailySummaryTab open={open} won={won} newDeals={newDeals} recW={recW} calls={calls} acOK={acOK} ib={ib} ob={ob} ms={ms} sm={sm} um={um} label={label} fromStr={fromStr} toStr={toStr}/>;
+        if(tab==="daily") return <DailySummaryTab open={open} won={won} newDeals={[]} recW={[]} calls={calls} acOK={acOK} ib={[]} ob={[]} ms={[]} sm={sm} um={um} label="" fromStr="" toStr=""/>;
         if(tab==="inventory") return <ProductsTab products={products} codeMap={codeMap}/>;
 
         if(tab==="aircall") {
           if(!acOK) return <Alert type="gold">⚠️ Aircall לא מחובר</Alert>;
-
-          // ביצועים לפי נציג
-          const agentStats={};
-          calls.forEach(c=>{
-            const name=c.user?.name||c.user?.email||"לא ידוע";
-            if(!agentStats[name]) agentStats[name]={name,total:0,inbound:0,outbound:0,missed:0,duration:0,answered:0};
-            agentStats[name].total++;
-            if(c.direction==="inbound") agentStats[name].inbound++;
-            if(c.direction==="outbound") agentStats[name].outbound++;
-            const isMissed=c.missed===true||c.status==="missed"||(c.direction==="inbound"&&c.answered===false)||(c.direction==="inbound"&&!c.duration);
-            if(isMissed) agentStats[name].missed++;
-            else { agentStats[name].answered++; agentStats[name].duration+=(c.duration||0); }
-          });
-          const agentArr=Object.values(agentStats).sort((a,b)=>b.total-a.total);
-
-          // שיחות לפי שעה
-          const hourStats=Array(24).fill(0);
-          calls.forEach(c=>{ const h=new Date((c.started_at||c.created_at||0)*1000).getHours(); hourStats[h]++; });
-          const maxHour=Math.max(...hourStats,1);
-
-          // שיחות שלא נענו
-          const missedCalls=calls.filter(c=>c.missed===true||c.status==="missed"||(c.direction==="inbound"&&c.answered===false)||(c.direction==="inbound"&&!c.duration));
-
-          return <div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
-              <Kpi label="📞 סה״כ שיחות" value={calls.length} delta={label}/>
-              <Kpi label="📲 נכנסות" value={ib.length} color={T.teal} dc={T.teal}/>
-              <Kpi label="📤 יוצאות" value={ob.length} color={T.gold} dc={T.gold}/>
-              <Kpi label="🔕 לא נענו" value={ms.length} delta={"מענה "+rate+"%"} color={T.red} dc={T.red}/>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:10}}>
-              <Kpi label="⏱️ משך ממוצע" value={mmss(dur)} delta="שיחות שנענו"/>
-              <Kpi label="✅ שיחות שנענו" value={calls.length-ms.length} color={T.teal}/>
-              <Kpi label="📊 שיעור מענה" value={rate+"%"} color={rate>=80?T.teal:T.gold} dc={rate>=80?T.teal:T.gold}/>
-            </div>
-
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-              <div style={card}>
-                <div style={ct}>ביצועים לפי נציג</div>
-                {agentArr.length===0?<div style={{color:T.muted,fontSize:12}}>אין נתונים</div>:
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                  <thead><tr>
-                    {["נציג","סה״כ","נכנסות","יוצאות","לא נענו","מענה %"].map(h=>
-                      <th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"4px 6px 8px",borderBottom:"1px solid "+T.border,fontSize:10}}>{h}</th>
-                    )}
-                  </tr></thead>
-                  <tbody>{agentArr.map((a,i)=><tr key={a.name} style={{borderBottom:"1px solid "+T.border}}>
-                    <td style={{padding:"7px 6px",fontWeight:600,fontSize:11}}>{a.name.split(" ")[0]||a.name}</td>
-                    <td style={{padding:"7px 6px",color:T.muted}}>{a.total}</td>
-                    <td style={{padding:"7px 6px",color:T.teal}}>{a.inbound}</td>
-                    <td style={{padding:"7px 6px",color:T.gold}}>{a.outbound}</td>
-                    <td style={{padding:"7px 6px",color:a.missed>0?T.red:T.muted}}>{a.missed}</td>
-                    <td style={{padding:"7px 6px"}}>
-                      <span style={{fontSize:11,fontWeight:600,color:a.total>0&&(a.total-a.missed)/a.total>=0.8?T.teal:T.gold}}>
-                        {a.total>0?Math.round((a.total-a.missed)/a.total*100):0}%
-                      </span>
-                    </td>
-                  </tr>)}</tbody>
-                </table>}
-              </div>
-
-              <div style={card}>
-                <div style={ct}>שיחות לא נענו ({missedCalls.length})</div>
-                {missedCalls.length===0?<div style={{color:T.muted,fontSize:12}}>אין שיחות שלא נענו 🎉</div>:
-                <div style={{maxHeight:220,overflowY:"auto"}}>
-                  {missedCalls.slice(0,20).map((c,i)=>{
-                    const ts=new Date((c.started_at||c.created_at||0)*1000);
-                    const timeStr=ts.toLocaleTimeString("he-IL",{hour:"2-digit",minute:"2-digit"});
-                    const dateStr=ts.toLocaleDateString("he-IL",{day:"2-digit",month:"2-digit"});
-                    const num=c.raw_digits||c.from||c.number||"–";
-                    return <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid "+T.border}}>
-                      <div>
-                        <div style={{fontSize:12,color:"#F0F4F8",fontWeight:500}}>{String(num).substring(0,16)}</div>
-                        <div style={{fontSize:10,color:T.muted}}>{dateStr} {timeStr}</div>
-                      </div>
-                      <span style={{fontSize:10,padding:"2px 8px",borderRadius:10,background:"rgba(232,72,85,.15)",color:T.red}}>לא נענה</span>
-                    </div>;
-                  })}
-                </div>}
-              </div>
-            </div>
-
-            <div style={{...card,marginBottom:10}}>
-              <div style={ct}>עומס לפי שעה ביום</div>
-              <div style={{display:"flex",gap:3,alignItems:"flex-end",height:80}}>
-                {hourStats.map((count,h)=>(
-                  <div key={h} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-                    <div style={{width:"100%",background:count>0?T.teal:"rgba(255,255,255,.05)",borderRadius:"3px 3px 0 0",height:count>0?`${Math.round(count/maxHour*64)+4}px`:"4px",transition:"height .3s"}}/>
-                    {h%4===0&&<div style={{fontSize:9,color:T.muted}}>{h}:00</div>}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div style={card}>
-              <div style={ct}>רשימת שיחות ({calls.length})</div>
-              <div style={{maxHeight:300,overflowY:"auto"}}>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                  <thead><tr>
-                    {["מספר","כיוון","סטטוס","משך","שעה","נציג"].map(h=>
-                      <th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"4px 6px 8px",borderBottom:"1px solid "+T.border,fontSize:10,position:"sticky",top:0,background:T.navyCard}}>{h}</th>
-                    )}
-                  </tr></thead>
-                  <tbody>{calls.slice(0,50).map((c,i)=>{
-                    const isMissed=c.missed===true||c.status==="missed"||(c.direction==="inbound"&&c.answered===false)||(c.direction==="inbound"&&!c.duration);
-                    const ts=new Date((c.started_at||c.created_at||0)*1000);
-                    const timeStr=ts.toLocaleString("he-IL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
-                    const num=c.raw_digits||c.from||c.number||"–";
-                    const agentName=(c.user?.name||c.user?.email||"–").split(" ")[0];
-                    return <tr key={i} style={{borderBottom:"1px solid "+T.border}}>
-                      <td style={{padding:"6px",fontSize:11}}>{String(num).substring(0,16)}</td>
-                      <td style={{padding:"6px"}}><span style={{fontSize:10,color:c.direction==="inbound"?T.teal:T.gold}}>{c.direction==="inbound"?"נכנסת":"יוצאת"}</span></td>
-                      <td style={{padding:"6px"}}><span style={{fontSize:10,padding:"2px 6px",borderRadius:8,background:isMissed?"rgba(232,72,85,.15)":"rgba(29,184,160,.15)",color:isMissed?T.red:T.teal}}>{isMissed?"לא נענה":"נענה"}</span></td>
-                      <td style={{padding:"6px",color:T.muted}}>{c.duration?mmss(c.duration):"–"}</td>
-                      <td style={{padding:"6px",color:T.muted,fontSize:10}}>{timeStr}</td>
-                      <td style={{padding:"6px",color:T.muted}}>{agentName}</td>
-                    </tr>;
-                  })}</tbody>
-                </table>
-              </div>
-            </div>
-          </div>;
+          return <AircallTabInner allCalls={calls}/>;
         }
 
         if(tab==="commitments") return <CommitmentsTab products={products} codeMap={codeMap}/>;
         if(tab==="seo") return <SeoTab/>;
-        if(tab==="ads") return <AdsTab won={won} fromStr={fromStr} toStr={toStr} label={label}/>;
+        if(tab==="ads") return <AdsTabWrapper won={won}/>;
 
-        return <>
-          {stuck>0&&<Alert type="red">⚠️ {stuck} עסקאות תקועות מעל 14 ימים</Alert>}
-          {ms.length>8&&<Alert type="gold">📵 {ms.length} שיחות לא נענו ב-{label}</Alert>}
+        if(tab==="main") return <MainTabInner open={open} won={won} pVal={pVal} sm={sm} um={um} calls={calls} acOK={acOK}/>;
 
-          {tab==="main"&&<>
-            <SecDiv>Pipedrive – סיכום</SecDiv>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
-              <Kpi label="📋 עסקאות חדשות" value={newDeals.length} delta={label}/>
-              <Kpi label="📂 עסקאות פתוחות" value={open.length} delta="סה״כ ב-pipeline"/>
-              <Kpi label="✅ נסגרו" value={recW.length} delta={label} dc={T.teal}/>
-              <Kpi label="💰 ערך pipeline" value={fmt(pVal)} color={T.gold} dc={T.gold}/>
-            </div>
-            <SecDiv color={T.gold}>Aircall – שיחות</SecDiv>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
-              <Kpi label="📞 סה״כ שיחות" value={acOK?calls.length:"–"} delta={label}/>
-              <Kpi label="📲 נכנסות" value={acOK?ib.length:"–"} dc={T.teal}/>
-              <Kpi label="📤 יוצאות" value={acOK?ob.length:"–"} color={T.gold}/>
-              <Kpi label="🔕 לא נענו" value={acOK?ms.length:"–"} delta={"מענה "+rate+"%"} color={T.red} dc={T.red}/>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:10}}>
-              <div style={card}><div style={ct}>משפך מכירות</div><Funnel open={open} sm={sm}/></div>
-              <div style={card}><div style={ct}>שיחות Aircall</div><Donut calls={calls} ib={ib} ob={ob} ms={ms} dur={dur} rate={rate} ok={acOK}/></div>
-              <div style={card}>
-                <div style={ct}>ערך לפי שלב</div>
-                {(()=>{const sv={};open.forEach(x=>{const n=sm[x.stage_id]||"אחר";sv[n]=(sv[n]||0)+(Number(x.value)||0);});
-                return Object.entries(sv).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([n,v])=>
-                  <div key={n} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid "+T.border}}>
-                    <span style={{fontSize:11,color:T.muted}}>{n.substring(0,18)}</span>
-                    <span style={{fontSize:12,fontWeight:600,color:T.teal}}>{fmt(v)}</span>
-                  </div>)})()}
-              </div>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <div style={card}>
-                <div style={ct}>נציגים – פתוחות וסגירות</div>
-                <AgentStats open={open} won={recW} um={um}/>
-              </div>
-              <div style={card}>
-                <div style={ct}>נסגרו לאחרונה</div>
-                {won.sort((a,b)=>new Date(b.won_time||0)-new Date(a.won_time||0)).slice(0,5).map(x=>{
-                  const tripCode=x[F_TOUR_CODE]||"";
-                  return <div key={x.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid "+T.border}}>
-                    <div>
-                      <div style={{fontSize:11,color:T.muted}}>{(x.title||"").substring(0,28)}</div>
-                      {tripCode&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:10,background:"rgba(123,104,238,.1)",color:"#9B8FFF",marginTop:2,display:"inline-block"}}>{tripCode}</span>}
-                    </div>
-                    <span style={{fontSize:12,fontWeight:600,color:T.teal}}>{fmt(x.value)}</span>
-                  </div>;
-                })}
-                {!won.length&&<div style={{color:T.muted,fontSize:12}}>אין עסקאות</div>}
-              </div>
-            </div>
-          </>}
-
-          {tab==="leads"&&<>
+        if(tab==="leads") return <>
             <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap",alignItems:"center"}}>
               <select value={filterAgent} onChange={e=>setFilterAgent(e.target.value)}
                 style={{background:T.navyCard,border:"1px solid "+T.border,color:"#F0F4F8",fontSize:12,padding:"6px 10px",borderRadius:6,cursor:"pointer"}}>
@@ -1560,8 +1493,9 @@ function App() {
             </div>
             <SecDiv color={T.gold}>כל העסקאות הפתוחות</SecDiv>
             <div style={card}><LeadsTable open={open} sm={sm} um={um} filterAgent={filterAgent} filterStage={filterStage}/></div>
-          </>}
-        </>;
+          </>;
+
+        return null;
       })()}
     </div>
   </div>;
