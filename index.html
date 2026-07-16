@@ -767,6 +767,170 @@ function ProductsTab({products, codeMap}) {
   </div>;
 }
 
+function DailySummaryTab({open, won, newDeals, recW, calls, acOK, ib, ob, ms, sm, um, label, fromStr, toStr}) {
+  const [aiSummary, setAiSummary] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
+  const yStr = yesterday.toISOString().split("T")[0];
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  // Yesterday's data
+  const yDeals = (newDeals||[]).filter(d=>d.add_time&&d.add_time.substring(0,10)===yStr);
+  const yWon = (won||[]).filter(d=>d.won_time&&d.won_time.substring(0,10)===yStr);
+  const yWonVal = yWon.reduce((s,d)=>s+(Number(d.value)||0),0);
+  const yCalls = (calls||[]).filter(c=>{const ts=new Date((c.started_at||c.created_at||0)*1000);return ts.toISOString().split("T")[0]===yStr;});
+  const yMissed = yCalls.filter(c=>c.missed===true||c.status==="missed"||(c.direction==="inbound"&&c.answered===false)||(c.direction==="inbound"&&!c.duration));
+  const yInbound = yCalls.filter(c=>c.direction==="inbound");
+  const yOutbound = yCalls.filter(c=>c.direction==="outbound");
+
+  // Focus areas
+  const stuck = (open||[]).filter(x=>daysIn(x)>14);
+  const waiting = (open||[]).filter(x=>daysIn(x)>7&&daysIn(x)<=14);
+  const highValue = (open||[]).sort((a,b)=>(Number(b.value)||0)-(Number(a.value)||0)).slice(0,5);
+
+  // Commitments deadlines
+  const cruiseCompanies = (() => { try { return JSON.parse(localStorage.getItem("commitment_cruise")||"[]"); } catch(e) { return []; } })();
+  const selections = (() => { try { return JSON.parse(localStorage.getItem("commitment_selections")||"{}"); } catch(e) { return {}; } })();
+
+  // Missed calls to return
+  const missedToReturn = yMissed.filter(c=>c.raw_digits||c.from||c.number).slice(0,5);
+
+  async function generateAISummary() {
+    setAiLoading(true); setAiError("");
+    try {
+      const context = {
+        yesterday: yStr,
+        newDeals: yDeals.length,
+        wonDeals: yWon.length,
+        wonValue: yWonVal,
+        totalCalls: yCalls.length,
+        inbound: yInbound.length,
+        outbound: yOutbound.length,
+        missed: yMissed.length,
+        stuckDeals: stuck.length,
+        waitingDeals: waiting.length,
+        totalOpen: (open||[]).length,
+        highValueDeals: highValue.map(d=>({title:d.title,value:d.value,days:daysIn(d),stage:sm[d.stage_id]||""})),
+        missedNumbers: missedToReturn.map(c=>c.raw_digits||c.from||c.number||"").filter(Boolean),
+      };
+
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          model:"claude-sonnet-4-6",
+          max_tokens:1000,
+          messages:[{role:"user",content:`אתה עוזר עסקי של חברת תיירות שמוכרת קרוזים וטיולים מאורגנים. כתוב סיכום יומי קצר ומעשי בעברית.
+
+נתוני אתמול (${yStr}):
+- עסקאות חדשות: ${context.newDeals}
+- עסקאות שנסגרו: ${context.wonDeals} (ערך: $${context.wonValue})
+- שיחות: ${context.totalCalls} (נכנסות: ${context.inbound}, יוצאות: ${context.outbound}, לא נענו: ${context.missed})
+
+מצב נוכחי:
+- עסקאות פתוחות: ${context.totalOpen}
+- תקועות מעל 14 יום: ${context.stuckDeals}
+- ממתינות 7-14 יום: ${context.waitingDeals}
+- עסקאות בערך גבוה: ${JSON.stringify(context.highValueDeals)}
+
+כתוב:
+1. סיכום קצר של אתמול (3-4 משפטים)
+2. 3-5 משימות מומלצות להיום (ממוקדות, פרקטיות)
+3. אם יש שיחות שלא נענו, ציין שצריך לחזור אליהן
+
+כתוב בנקודות, קצר ולעניין. אל תשתמש בכותרות גדולות.`}]
+        })
+      });
+      const data = await resp.json();
+      const text = data.content?.map(c=>c.text||"").join("\n") || "לא התקבלה תשובה";
+      setAiSummary(text);
+    } catch(ex) {
+      setAiError("שגיאה ביצירת סיכום: "+ex.message);
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  useEffect(()=>{ if(!aiSummary && !aiLoading) generateAISummary(); },[]);
+
+  const fmtDateHe = ds => { const d=new Date(ds); return d.toLocaleDateString("he-IL",{weekday:"long",day:"2-digit",month:"2-digit",year:"numeric"}); };
+
+  return <div>
+    <SecDiv color={T.gold}>🌅 סיכום יומי — {fmtDateHe(yesterday)}</SecDiv>
+
+    {/* Yesterday KPIs */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:12}}>
+      <Kpi label="📋 עסקאות חדשות" value={yDeals.length} delta="אתמול"/>
+      <Kpi label="✅ נסגרו" value={yWon.length} delta={yWonVal>0?fmt(yWonVal):""} color={T.teal} dc={T.teal}/>
+      <Kpi label="📞 שיחות" value={yCalls.length} delta={`${yInbound.length} נכנסות, ${yOutbound.length} יוצאות`}/>
+      <Kpi label="🔕 לא נענו" value={yMissed.length} color={yMissed.length>3?T.red:T.gold} dc={yMissed.length>3?T.red:T.gold}/>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      {/* AI Summary */}
+      <div style={{...card,gridColumn:aiSummary?"1":"1 / -1"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={ct}>🤖 ניתוח AI — מה קרה אתמול ומה לעשות היום</div>
+          <button onClick={generateAISummary} disabled={aiLoading}
+            style={{background:T.teal,color:"#06251f",fontWeight:600,fontSize:11,padding:"4px 12px",borderRadius:6,border:"none",cursor:"pointer"}}>
+            {aiLoading?"⏳ מנתח...":"↻ חדש"}
+          </button>
+        </div>
+        {aiLoading && <div style={{textAlign:"center",padding:"2rem",color:T.muted}}><div className="spinner"/>מנתח את הנתונים...</div>}
+        {aiError && <Alert type="red">⚠️ {aiError}</Alert>}
+        {aiSummary && <div style={{fontSize:13,color:"#F0F4F8",lineHeight:2,whiteSpace:"pre-wrap"}}>{aiSummary}</div>}
+      </div>
+
+      {/* Action items */}
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        {/* Stuck deals */}
+        {stuck.length>0 && <div style={card}>
+          <div style={ct}>⚠️ עסקאות תקועות ({stuck.length})</div>
+          {stuck.sort((a,b)=>daysIn(b)-daysIn(a)).slice(0,5).map(d=>
+            <div key={d.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:"1px solid "+T.border}}>
+              <div>
+                <div style={{fontSize:11,color:"#F0F4F8"}}>{(d.title||"").substring(0,25)}</div>
+                <div style={{fontSize:10,color:T.muted}}>{sm[d.stage_id]||""} · {(um[d.user_id?.id||d.user_id]||"").split(" ")[0]}</div>
+              </div>
+              <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:10,background:"rgba(232,72,85,.15)",color:T.red}}>{daysIn(d)} ימים</span>
+            </div>
+          )}
+          {stuck.length>5 && <div style={{fontSize:10,color:T.muted,marginTop:4}}>+{stuck.length-5} נוספות</div>}
+        </div>}
+
+        {/* Missed calls to return */}
+        {missedToReturn.length>0 && <div style={card}>
+          <div style={ct}>📵 שיחות לא נענו — לחזור אליהן</div>
+          {missedToReturn.map((c,i)=>{
+            const num=c.raw_digits||c.from||c.number||"–";
+            const ts=new Date((c.started_at||c.created_at||0)*1000);
+            return <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:"1px solid "+T.border}}>
+              <span style={{fontSize:12,color:"#F0F4F8"}}>{String(num).substring(0,16)}</span>
+              <span style={{fontSize:10,color:T.muted}}>{ts.toLocaleTimeString("he-IL",{hour:"2-digit",minute:"2-digit"})}</span>
+            </div>;
+          })}
+        </div>}
+
+        {/* High value deals */}
+        {highValue.length>0 && <div style={card}>
+          <div style={ct}>💎 עסקאות בערך גבוה</div>
+          {highValue.map(d=>
+            <div key={d.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:"1px solid "+T.border}}>
+              <div>
+                <div style={{fontSize:11,color:"#F0F4F8"}}>{(d.title||"").substring(0,25)}</div>
+                <div style={{fontSize:10,color:T.muted}}>{sm[d.stage_id]||""}</div>
+              </div>
+              <span style={{fontSize:12,fontWeight:600,color:T.teal}}>{fmt(d.value)}</span>
+            </div>
+          )}
+        </div>}
+      </div>
+    </div>
+  </div>;
+}
+
 function CommitmentsTab({products, codeMap}) {
   const [selections, setSelections] = useState(() => {
     try { const s = localStorage.getItem("commitment_selections"); return s ? JSON.parse(s) : {}; } catch(e) { return {}; }
@@ -1071,7 +1235,7 @@ function SeoTab() {
 }
 
 function App() {
-  const [tab,setTab]         = useState("main");
+  const [tab,setTab]         = useState("daily");
   const [days,setDays]       = useState("this_month");
   const [loading,setLoading] = useState(true);
   const [status,setStatus]   = useState("טוען...");
@@ -1147,7 +1311,7 @@ function App() {
   useEffect(()=>{load();},[load]);
   useEffect(()=>{const id=setInterval(load,5*60*1000);return()=>clearInterval(id);},[load]);
 
-  const tabs=[{id:"main",label:"📊 סקירה"},{id:"leads",label:"🔥 לידים"},{id:"inventory",label:"🛳️ מלאי"},{id:"aircall",label:"📞 Aircall"},{id:"ads",label:"📢 פרסום"},{id:"commitments",label:"💼 התחייבויות"},{id:"seo",label:"🔍 SEO"}];
+  const tabs=[{id:"daily",label:"🌅 סיכום יומי"},{id:"main",label:"📊 סקירה"},{id:"leads",label:"🔥 לידים"},{id:"inventory",label:"🛳️ מלאי"},{id:"aircall",label:"📞 Aircall"},{id:"ads",label:"📢 פרסום"},{id:"commitments",label:"💼 התחייבויות"},{id:"seo",label:"🔍 SEO"}];
 
   return <div style={{background:T.navy,minHeight:"100vh",direction:"rtl"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 18px",borderBottom:"1px solid "+T.border,background:T.navyMid,position:"sticky",top:0,zIndex:10}}>
@@ -1193,6 +1357,7 @@ function App() {
         const {open,won,newDeals,recW,pVal,sm,um,calls,acOK,ib,ob,ms,dur,rate,products,label,fromStr,toStr}=data;
         const stuck=open.filter(x=>daysIn(x)>14).length;
 
+        if(tab==="daily") return <DailySummaryTab open={open} won={won} newDeals={newDeals} recW={recW} calls={calls} acOK={acOK} ib={ib} ob={ob} ms={ms} sm={sm} um={um} label={label} fromStr={fromStr} toStr={toStr}/>;
         if(tab==="inventory") return <ProductsTab products={products} codeMap={codeMap}/>;
 
         if(tab==="aircall") {
