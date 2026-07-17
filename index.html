@@ -662,9 +662,10 @@ function ProductsTab({products, codeMap}) {
     return{...p,code,tripNum,roomType,tripName:codeMap[code]||"",free,used,total,departureDate};
   });
 
-  // רק טיולים עם תאריך יציאה מ-1/1/2026 ואילך (מוצרים בלי תאריך יציאה לא מוצגים)
-  const MIN_DATE = "2026-01-01";
-  const parsed2026 = parsed.filter(p => p.departureDate && p.departureDate >= MIN_DATE);
+  // רק טיולים עם תאריך יציאה מהיום ואילך (מוצרים בלי תאריך יציאה או שעבר התאריך לא מוצגים)
+  const todayDate = new Date();
+  const todayISO = todayDate.getFullYear()+"-"+String(todayDate.getMonth()+1).padStart(2,"0")+"-"+String(todayDate.getDate()).padStart(2,"0");
+  const parsed2026 = parsed.filter(p => p.departureDate && p.departureDate >= todayISO);
 
   const allCodes=[...new Set(parsed2026.map(p=>p.code))].sort();
   const allRoomTypes=[...new Set(parsed2026.map(p=>p.roomType).filter(Boolean))].sort();
@@ -1247,9 +1248,9 @@ function DateFilter({value, onChange}) {
 
 function filterCalls(calls, fromStr, toStr) {
   return (calls||[]).filter(c=>{
-    const d = c.call_date || "";
-    if (!d) return false;
-    return d>=fromStr&&d<=toStr;
+    const ts=new Date((c.started_at||c.created_at||0)*1000);
+    const localDate=ts.getFullYear()+"-"+String(ts.getMonth()+1).padStart(2,"0")+"-"+String(ts.getDate()).padStart(2,"0");
+    return localDate>=fromStr&&localDate<=toStr;
   });
 }
 
