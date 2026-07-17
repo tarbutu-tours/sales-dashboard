@@ -1394,34 +1394,10 @@ function App() {
     }catch(e){}
   },[]);
 
-  const SHEET_ID = "1veKHXlA3Lb83q8vz769aJ3XJxLkFFY4yTlhKviurTjM";
-  const sheetCSV = async (name) => {
-    const url = "https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/gviz/tq?tqx=out:csv&sheet="+encodeURIComponent(name);
-    const r = await fetch(url); const t = await r.text();
-    const lines = t.split(/\r?\n/).filter(l=>l.trim());
-    if(lines.length<2) return [];
-    const parseCSVLine = function(line) {
-      const out=[]; let cur="",inQ=false;
-      for(let i=0;i<line.length;i++){
-        const c=line[i];
-        if(c==='"'&&inQ&&i+1<line.length&&line[i+1]==='"'){cur+='"';i++;continue;}
-        if(c==='"'){inQ=!inQ;continue;}
-        if(c===","&&!inQ){out.push(cur.trim());cur="";continue;}
-        cur+=c;
-      }
-      out.push(cur.trim());
-      return out;
-    };
-    const headers = parseCSVLine(lines[0]);
-    const rows = [];
-    for(let i=1;i<lines.length;i++){
-      if(!lines[i].trim()) continue;
-      const cols = parseCSVLine(lines[i]);
-      const obj = {};
-      headers.forEach(function(h,j){ obj[h]=cols[j]!==undefined?cols[j]:""; });
-      rows.push(obj);
-    }
-    return rows;
+  const WEBAPP = "https://script.google.com/macros/s/AKfycbxxs2zysopvrG_0oQ5AI6ofoInawziuWpLUQfZ4fn1KpKXw_AVX5w20AQ4OckICCIoBFw/exec";
+  const sheetJSON = async (name) => {
+    const r = await fetch(WEBAPP+"?sheet="+encodeURIComponent(name));
+    return r.json();
   };
 
   const load=useCallback(async()=>{
@@ -1431,21 +1407,21 @@ function App() {
     try {
       // Fetch all data from Google Sheets (fast!)
       const [rawOpen, rawWon, rawUsers, rawStages, rawProducts, rawCalls] = await Promise.all([
-        sheetCSV("deals_open").catch(()=>[]),
-        sheetCSV("deals_won").catch(()=>[]),
-        sheetCSV("users").catch(()=>[]),
-        sheetCSV("stages").catch(()=>[]),
-        sheetCSV("products").catch(()=>[]),
-        sheetCSV("calls").catch(()=>[])
+        sheetJSON("deals_open").catch(()=>[]),
+        sheetJSON("deals_won").catch(()=>[]),
+        sheetJSON("users").catch(()=>[]),
+        sheetJSON("stages").catch(()=>[]),
+        sheetJSON("products").catch(()=>[]),
+        sheetJSON("calls").catch(()=>[])
       ]);
 
       // Map deals back to expected format
       const mapDeal = d => ({
         id: Number(d.id)||0, title: d.title||"", value: Number(d.value)||0,
         currency: d.currency||"", status: d.status||"", stage_id: Number(d.stage_id)||0,
-        user_id: {id: Number(d.user_id)||0}, add_time: d.add_time||"",
-        won_time: d.won_time||"", stage_change_time: d.stage_change_time||"",
-        [F_SOURCE]: d.source||"", [F_TOUR_CODE]: d.tour_code||""
+        user_id: {id: Number(d.user_id)||0}, add_time: String(d.add_time||""),
+        won_time: String(d.won_time||""), stage_change_time: String(d.stage_change_time||""),
+        [F_SOURCE]: String(d.source||""), [F_TOUR_CODE]: String(d.tour_code||"")
       });
 
       const open = rawOpen.map(mapDeal);
@@ -1457,12 +1433,12 @@ function App() {
 
       // Map calls
       const calls = rawCalls.map(c=>({
-        id: c.id, direction: c.direction||"", status: c.status||"",
-        missed: c.missed==="TRUE", answered: c.answered==="TRUE",
+        id: c.id, direction: String(c.direction||""), status: String(c.status||""),
+        missed: c.missed===true||c.missed==="TRUE", answered: c.answered===true||c.answered==="TRUE",
         duration: Number(c.duration)||0, started_at: Number(c.started_at)||0,
         created_at: Number(c.started_at)||0,
-        raw_digits: c.raw_digits||"", from: c.from_number||"", number: c.from_number||"",
-        user: { name: c.user_name||"", email: c.user_email||"" }
+        raw_digits: String(c.raw_digits||""), from: String(c.from_number||""), number: String(c.from_number||""),
+        user: { name: String(c.user_name||""), email: String(c.user_email||"") }
       }));
 
       // Map products
