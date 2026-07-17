@@ -1204,14 +1204,16 @@ function AdsTabWrapper({won}) {
 }
 
 function calcRange(days) {
-  const today=new Date();const isoDate=d=>d.toISOString().split("T")[0];const todayStr=isoDate(today);
+  const today=new Date();
+  const localDate=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  const todayStr=localDate(today);
   if(days==="today") return {fromStr:todayStr,toStr:todayStr,label:"היום"};
-  if(days==="yesterday"){const y=new Date(today);y.setDate(y.getDate()-1);return{fromStr:isoDate(y),toStr:isoDate(y),label:"אתמול"};}
-  if(days==="this_week"){const d=new Date(today);d.setDate(d.getDate()-d.getDay());return{fromStr:isoDate(d),toStr:todayStr,label:"השבוע"};}
-  if(days==="last_week"){const end=new Date(today);end.setDate(end.getDate()-end.getDay()-1);const start=new Date(end);start.setDate(start.getDate()-6);return{fromStr:isoDate(start),toStr:isoDate(end),label:"שבוע שעבר"};}
+  if(days==="yesterday"){const y=new Date(today);y.setDate(y.getDate()-1);return{fromStr:localDate(y),toStr:localDate(y),label:"אתמול"};}
+  if(days==="this_week"){const d=new Date(today);d.setDate(d.getDate()-d.getDay());return{fromStr:localDate(d),toStr:todayStr,label:"השבוע"};}
+  if(days==="last_week"){const end=new Date(today);end.setDate(end.getDate()-end.getDay()-1);const start=new Date(end);start.setDate(start.getDate()-6);return{fromStr:localDate(start),toStr:localDate(end),label:"שבוע שעבר"};}
   if(days==="this_month") return{fromStr:todayStr.substring(0,7)+"-01",toStr:todayStr,label:"החודש"};
-  if(days==="last_month"){const d=new Date(today.getFullYear(),today.getMonth()-1,1);const de=new Date(today.getFullYear(),today.getMonth(),0);return{fromStr:isoDate(d),toStr:isoDate(de),label:"חודש שעבר"};}
-  const p=new Date(today);p.setDate(p.getDate()-Number(days||30));return{fromStr:isoDate(p),toStr:todayStr,label:days+" ימים"};
+  if(days==="last_month"){const d=new Date(today.getFullYear(),today.getMonth()-1,1);const de=new Date(today.getFullYear(),today.getMonth(),0);return{fromStr:localDate(d),toStr:localDate(de),label:"חודש שעבר"};}
+  const p=new Date(today);p.setDate(p.getDate()-Number(days||30));return{fromStr:localDate(p),toStr:todayStr,label:days+" ימים"};
 }
 
 function DateFilter({value, onChange}) {
@@ -1229,7 +1231,11 @@ function DateFilter({value, onChange}) {
 }
 
 function filterCalls(calls, fromStr, toStr) {
-  return (calls||[]).filter(c=>{const ts=new Date((c.started_at||c.created_at||0)*1000).toISOString().split("T")[0];return ts>=fromStr&&ts<=toStr;});
+  return (calls||[]).filter(c=>{
+    const ts=new Date((c.started_at||c.created_at||0)*1000);
+    const localDate=ts.getFullYear()+"-"+String(ts.getMonth()+1).padStart(2,"0")+"-"+String(ts.getDate()).padStart(2,"0");
+    return localDate>=fromStr&&localDate<=toStr;
+  });
 }
 
 function SeoTab() {
