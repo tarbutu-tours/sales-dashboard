@@ -1405,17 +1405,20 @@ function App() {
     const e=[];
 
     try {
-      // Fetch all data from Google Sheets (fast!)
-      const [rawOpen, rawWon, rawUsers, rawStages, rawProducts, rawCalls] = await Promise.all([
-        sheetJSON("deals_open").catch(()=>[]),
-        sheetJSON("deals_won").catch(()=>[]),
-        sheetJSON("users").catch(()=>[]),
-        sheetJSON("stages").catch(()=>[]),
-        sheetJSON("products").catch(()=>[]),
-        sheetJSON("calls").catch(()=>[])
-      ]);
+      setStatus("שולף עסקאות...");
+      const rawOpen = await sheetJSON("deals_open").catch(()=>{e.push("שגיאה בעסקאות פתוחות");return[];});
+      const rawWon = await sheetJSON("deals_won").catch(()=>{e.push("שגיאה בעסקאות שנסגרו");return[];});
+      
+      setStatus("שולף משתמשים...");
+      const rawUsers = await sheetJSON("users").catch(()=>[]);
+      const rawStages = await sheetJSON("stages").catch(()=>[]);
+      
+      setStatus("שולף מוצרים...");
+      const rawProducts = await sheetJSON("products").catch(()=>[]);
+      
+      setStatus("שולף שיחות...");
+      const rawCalls = await sheetJSON("calls").catch(()=>{e.push("שגיאה בשיחות");return[];});
 
-      // Map deals back to expected format
       const mapDeal = d => ({
         id: Number(d.id)||0, title: d.title||"", value: Number(d.value)||0,
         currency: d.currency||"", status: d.status||"", stage_id: Number(d.stage_id)||0,
@@ -1424,15 +1427,14 @@ function App() {
         [F_SOURCE]: String(d.source||""), [F_TOUR_CODE]: String(d.tour_code||"")
       });
 
-      const open = rawOpen.map(mapDeal);
-      const won = rawWon.map(mapDeal);
+      const open = (Array.isArray(rawOpen)?rawOpen:[]).map(mapDeal);
+      const won = (Array.isArray(rawWon)?rawWon:[]).map(mapDeal);
       const pVal = open.reduce((s,x)=>s+(Number(x.value)||0),0);
 
-      const sm = {}; rawStages.forEach(s=>{ sm[Number(s.id)]=s.name; });
-      const um = {}; rawUsers.forEach(u=>{ um[Number(u.id)]=u.name; });
+      const sm = {}; (Array.isArray(rawStages)?rawStages:[]).forEach(s=>{ sm[Number(s.id)]=s.name; });
+      const um = {}; (Array.isArray(rawUsers)?rawUsers:[]).forEach(u=>{ um[Number(u.id)]=u.name; });
 
-      // Map calls
-      const calls = rawCalls.map(c=>({
+      const calls = (Array.isArray(rawCalls)?rawCalls:[]).map(c=>({
         id: c.id, direction: String(c.direction||""), status: String(c.status||""),
         missed: c.missed===true||c.missed==="TRUE", answered: c.answered===true||c.answered==="TRUE",
         duration: Number(c.duration)||0, started_at: Number(c.started_at)||0,
@@ -1441,16 +1443,14 @@ function App() {
         user: { name: String(c.user_name||""), email: String(c.user_email||"") }
       }));
 
-      // Map products
-      const products = rawProducts.map(p=>({
+      const products = (Array.isArray(rawProducts)?rawProducts:[]).map(p=>({
         id: Number(p.id)||0, name: p.name||"",
         [F_FREE]: Number(p.free)||0, [F_USED]: Number(p.used)||0,
-        [F_TOTAL]: Number(p.total)||0, [F_DEPARTURE]: p.departure_date||"",
+        [F_TOTAL]: Number(p.total)||0, [F_DEPARTURE]: String(p.departure_date||""),
         quantity_available: Number(p.free)||0, quantity_used: Number(p.used)||0
       }));
 
       const acOK = calls.length > 0;
-
       setData({open,won,pVal,sm,um,calls,acOK,products});
     } catch(ex) {
       e.push("שגיאה בטעינה: "+ex.message);
