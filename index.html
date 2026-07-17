@@ -1168,6 +1168,14 @@ function AircallTabInner({allCalls}) {
   const [days, setDays] = useState("today");
   const {fromStr,toStr,label} = calcRange(days);
   const calls = filterCalls(allCalls, fromStr, toStr);
+
+  // Debug: show first 3 call timestamps
+  const debugInfo = allCalls.slice(0,3).map(c=>{
+    const raw = c.started_at;
+    const ts = new Date(raw*1000);
+    const local = ts.getFullYear()+"-"+String(ts.getMonth()+1).padStart(2,"0")+"-"+String(ts.getDate()).padStart(2,"0");
+    return "raw="+raw+" date="+local;
+  }).join(" | ");
   const ib = calls.filter(c=>c.direction==="inbound");
   const ob = calls.filter(c=>c.direction==="outbound");
   const ms = calls.filter(c=>c.missed===true||c.status==="missed"||(c.direction==="inbound"&&c.answered===false)||(c.direction==="inbound"&&!c.duration));
@@ -1183,6 +1191,9 @@ function AircallTabInner({allCalls}) {
 
   return <div>
     <div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}><DateFilter value={days} onChange={setDays}/></div>
+    <div style={{fontSize:10,color:T.gold,marginBottom:8,padding:"6px 10px",background:"rgba(240,180,41,.1)",borderRadius:6}}>
+      DEBUG: total={allCalls.length} filtered={calls.length} from={fromStr} to={toStr} | {debugInfo}
+    </div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
       <Kpi label="📞 סה״כ שיחות" value={calls.length} delta={label}/><Kpi label="📲 נכנסות" value={ib.length} color={T.teal} dc={T.teal}/><Kpi label="📤 יוצאות" value={ob.length} color={T.gold} dc={T.gold}/><Kpi label="🔕 לא נענו" value={ms.length} delta={"מענה "+rate+"%"} color={T.red} dc={T.red}/>
     </div>
