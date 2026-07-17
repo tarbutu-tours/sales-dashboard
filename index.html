@@ -1161,7 +1161,7 @@ function MainTabInner({open, won, pVal, sm, um, calls, acOK}) {
 }
 
 function AircallTabInner({allCalls}) {
-  const [days, setDays] = useState("this_month");
+  const [days, setDays] = useState("today");
   const {fromStr,toStr,label} = calcRange(days);
   const calls = filterCalls(allCalls, fromStr, toStr);
   const ib = calls.filter(c=>c.direction==="inbound");
@@ -1390,43 +1390,80 @@ function App() {
     }catch(e){}
   },[]);
 
+  const SHEET_ID = "1veKHXlA3Lb83q8vz769aJ3XJxLkFFY4yTlhKviurTjM";
+  const sheetCSV = async (name) => {
+    const url = "https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/gviz/tq?tqx=out:csv&sheet="+encodeURIComponent(name)+"&t="+Date.now();
+    const r = await fetch(url); const t = await r.text();
+    const lines = t.split("\n").filter(l=>l.trim());
+    if(lines.length<2) return [];
+    const parseCSVLine = line => { const out=[]; let cur="",inQ=false; for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){inQ=!inQ;continue;}if(c===","&&!inQ){out.push(cur);cur="";continue;}cur+=c;} out.push(cur); return out; };
+    const headers = parseCSVLine(lines[0]).map(h=>h.trim().replace(/^"|"$/g,""));
+    const rows = [];
+    for(let i=1;i<lines.length;i++){
+      const cols = parseCSVLine(lines[i]).map(c=>c.trim().replace(/^"|"$/g,""));
+      const obj = {};
+      headers.forEach((h,j)=>{ obj[h]=cols[j]||""; });
+      rows.push(obj);
+    }
+    return rows;
+  };
+
   const load=useCallback(async()=>{
     setLoading(true); setErrs([]); setStatus("שולף נתונים...");
-    const today=new Date();
-    const todayStr=today.toISOString().split("T")[0];
-    const isoDate=d=>d.toISOString().split("T")[0];
-    // Always fetch 90 days of data — each tab filters its own range
-    const p90=new Date(today);p90.setDate(p90.getDate()-90);
-    const fromStr=isoDate(p90);
-    const toStr=todayStr;
-    const sinceTs=Math.floor(p90.getTime()/1000);
     const e=[];
 
-    const openDeals = await pdAll("/deals?status=all&filter_id=116295").catch(ex=>{e.push("Pipedrive פתוחות: "+ex.message);return[];});
-    const wonDeals  = await pdAll("/deals?status=all&filter_id=116296").catch(ex=>{e.push("Pipedrive נסגרו: "+ex.message);return[];});
-    const deduped = [...new Map([...openDeals,...wonDeals].map(d=>[d.id,d])).values()];
-    const deals = deduped;
-
-    const [users,stages,products] = await Promise.all([
-      pdAll("/users").catch(()=>[]),
-      pdAll("/stages").catch(()=>[]),
-      pdAll("/products").catch(()=>[])
-    ]);
-
-    let calls=[], acOK=false;
     try {
-      calls = await acGetAllCalls(sinceTs);
-      acOK = true;
-    } catch(ex) { e.push("Aircall: "+ex.message); }
+      // Fetch all data from Google Sheets (fast!)
+      const [rawOpen, rawWon, rawUsers, rawStages, rawProducts, rawCalls] = await Promise.all([
+        sheetCSV("deals_open").catch(()=>[]),
+        sheetCSV("deals_won").catch(()=>[]),
+        sheetCSV("users").catch(()=>[]),
+        sheetCSV("stages").catch(()=>[]),
+        sheetCSV("products").catch(()=>[]),
+        sheetCSV("calls").catch(()=>[])
+      ]);
 
-    const open    = deals.filter(x=>x.status==="open");
-    const won     = deals.filter(x=>x.status==="won");
-    const pVal    = open.reduce((s,x)=>s+(Number(x.value)||0),0);
+      // Map deals back to expected format
+      const mapDeal = d => ({
+        id: Number(d.id)||0, title: d.title||"", value: Number(d.value)||0,
+        currency: d.currency||"", status: d.status||"", stage_id: Number(d.stage_id)||0,
+        user_id: {id: Number(d.user_id)||0}, add_time: d.add_time||"",
+        won_time: d.won_time||"", stage_change_time: d.stage_change_time||"",
+        [F_SOURCE]: d.source||"", [F_TOUR_CODE]: d.tour_code||""
+      });
 
-    const sm={};stages.forEach(s=>sm[s.id]=s.name);
-    const um={};users.forEach(u=>um[u.id]=u.name);
+      const open = rawOpen.map(mapDeal);
+      const won = rawWon.map(mapDeal);
+      const pVal = open.reduce((s,x)=>s+(Number(x.value)||0),0);
 
-    setData({open,won,pVal,sm,um,calls,acOK,products});
+      const sm = {}; rawStages.forEach(s=>{ sm[Number(s.id)]=s.name; });
+      const um = {}; rawUsers.forEach(u=>{ um[Number(u.id)]=u.name; });
+
+      // Map calls
+      const calls = rawCalls.map(c=>({
+        id: c.id, direction: c.direction||"", status: c.status||"",
+        missed: c.missed==="TRUE", answered: c.answered==="TRUE",
+        duration: Number(c.duration)||0, started_at: Number(c.started_at)||0,
+        created_at: Number(c.started_at)||0,
+        raw_digits: c.raw_digits||"", from: c.from_number||"", number: c.from_number||"",
+        user: { name: c.user_name||"", email: c.user_email||"" }
+      }));
+
+      // Map products
+      const products = rawProducts.map(p=>({
+        id: Number(p.id)||0, name: p.name||"",
+        [F_FREE]: Number(p.free)||0, [F_USED]: Number(p.used)||0,
+        [F_TOTAL]: Number(p.total)||0, [F_DEPARTURE]: p.departure_date||"",
+        quantity_available: Number(p.free)||0, quantity_used: Number(p.used)||0
+      }));
+
+      const acOK = calls.length > 0;
+
+      setData({open,won,pVal,sm,um,calls,acOK,products});
+    } catch(ex) {
+      e.push("שגיאה בטעינה: "+ex.message);
+    }
+
     setErrs(e);
     setStatus("מחובר · "+new Date().toLocaleTimeString("he-IL"));
     setLoading(false);
