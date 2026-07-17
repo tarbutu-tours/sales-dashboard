@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>דשבורד מכירות – קרוזים</title>
-<script src="https://unpkg.com"></script>
-<script src="https://unpkg.com"></script>
-<script src="https://unpkg.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,'Segoe UI',Arial,sans-serif;background:#0B1F3A;color:#F0F4F8;direction:rtl;min-height:100vh}
@@ -23,7 +23,7 @@ const { useState, useEffect, useCallback } = React;
 const PD_TOKEN = "e30e3a85a358ecf8918b588d8af2fc31de1672dd";
 const AC_ID    = "c7974dd8b8bb959624fe606ef9ee4559";
 const AC_SEC   = "563ab5bc0049de0bdd0159193fc5e0c7";
-const WORKER   = "https://workers.dev";
+const WORKER   = "https://floral-bonus-cfa3.yanivd.workers.dev";
 const COLORS   = ["#1DB8A0","#1A9AE0","#F0B429","#E84855","#7B68EE","#F06292"];
 const T = { navy:"#0B1F3A", navyMid:"#132847", navyCard:"#1A3257", teal:"#1DB8A0", gold:"#F0B429", red:"#E84855", muted:"#7A9BBF", border:"rgba(255,255,255,0.07)" };
 const card = { background:T.navyCard, border:"1px solid "+T.border, borderRadius:12, padding:"14px 16px" };
@@ -68,7 +68,7 @@ async function wfetch(url, hdrs) {
 async function pdAll(ep) {
   let all=[], start=0;
   while(true) {
-    const url = "https://pipedrive.com"+ep+(ep.includes("?")?"&":"?")+"api_token="+PD_TOKEN+"&limit=100&start="+start;
+    const url = "https://api.pipedrive.com/v1"+ep+(ep.includes("?")?"&":"?")+"api_token="+PD_TOKEN+"&limit=100&start="+start;
     const j = await wfetch(url);
     if(!j.success) break;
     all = [...all, ...(j.data||[])];
@@ -80,7 +80,7 @@ async function pdAll(ep) {
 }
 
 async function acGet(ep) {
-  return wfetch("https://aircall.io"+ep, {"Authorization":"Basic "+btoa(AC_ID+":"+AC_SEC)});
+  return wfetch("https://api.aircall.io/v1"+ep, {"Authorization":"Basic "+btoa(AC_ID+":"+AC_SEC)});
 }
 
 async function acGetAllCalls(sinceTs) {
@@ -114,11 +114,14 @@ function Kpi({label, value, delta, color, dc}) {
   </div>;
 }
 
+// פיענוח קובץ CSV של Google Ads (קובץ Campaigns)
 function parseGoogleAdsCSV(text) {
+  // הסרת BOM אם קיים
   text = text.replace(/^\uFEFF/, "");
   const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
   if (lines.length < 2) throw new Error("קובץ ריק או לא תקין");
 
+  // פיענוח CSV פשוט (תומך בפסיקים בתוך מרכאות)
   function parseLine(line) {
     const out = []; let cur = ""; let inQ = false;
     for (let i = 0; i < line.length; i++) {
@@ -137,7 +140,7 @@ function parseGoogleAdsCSV(text) {
   const idxName = header.findIndex(h => h.toLowerCase().includes("campaign name"));
 
   if (idxCost === -1 || idxConv === -1) {
-    throw new Error("לא נמצאו עמודות Cost / Conversions בקובץ.");
+    throw new Error("לא נמצאו עמודות Cost / Conversions בקובץ. ודא שזה קובץ Campaigns שהורד מ-Google Ads.");
   }
 
   let totalCost = 0, totalConv = 0;
@@ -169,6 +172,1383 @@ function Alert({type, children}) {
   const s = type==="red"?{bg:"rgba(232,72,85,.1)",br:"rgba(232,72,85,.25)",c:"#F0827A"}:{bg:"rgba(240,180,41,.08)",br:"rgba(240,180,41,.25)",c:T.gold};
   return <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",borderRadius:8,fontSize:12,marginBottom:8,background:s.bg,border:"1px solid "+s.br,color:s.c}}>{children}</div>;
 }
+
+function Funnel({open, sm}) {
+  const sc={};
+  open.forEach(d=>{const n=sm[d.stage_id]||"אחר";sc[n]=(sc[n]||0)+1;});
+  const arr=Object.entries(sc).sort((a,b)=>b[1]-a[1]);
+  const max=arr[0]?.[1]||1;
+  if(!arr.length) return <div style={{color:T.muted,fontSize:12}}>אין עסקאות</div>;
+  return <div style={{display:"flex",flexDirection:"column",gap:5}}>
+    {arr.map(([n,c],i)=><div key={n} style={{display:"flex",alignItems:"center",gap:7}}>
+      <div style={{fontSize:11,color:T.muted,width:78,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{n}</div>
+      <div style={{flex:1,height:20,background:"rgba(255,255,255,.05)",borderRadius:4,overflow:"hidden"}}>
+        <div style={{width:`${Math.round(c/max*100)}%`,height:"100%",background:COLORS[i%6],display:"flex",alignItems:"center",padding:"0 7px",fontSize:11,fontWeight:600,color:"#fff",borderRadius:4}}>{c}</div>
+      </div>
+      <div style={{fontSize:10,color:T.muted,width:26,textAlign:"left"}}>{open.length?Math.round(c/open.length*100):0}%</div>
+    </div>)}
+  </div>;
+}
+
+function Donut({calls, ib, ob, ms, dur, rate, ok}) {
+  if(!ok) return <div style={{color:T.muted,fontSize:12,lineHeight:1.8}}>⚠️ Aircall לא מחובר</div>;
+  if(!calls.length) return <div style={{color:T.muted,fontSize:12}}>אין שיחות</div>;
+  const tot=calls.length;
+  const r1=Math.round(ib.length/tot*188), r2=Math.round(ob.length/tot*188), r3=Math.round(ms.length/tot*188);
+  return <>
+    <div style={{display:"flex",alignItems:"center",gap:14}}>
+      <svg width="84" height="84" viewBox="0 0 84 84">
+        <circle cx="42" cy="42" r="28" fill="none" stroke="rgba(255,255,255,.05)" strokeWidth="12"/>
+        <circle cx="42" cy="42" r="28" fill="none" stroke="#1DB8A0" strokeWidth="12" strokeDasharray={`${r1} 176`} strokeDashoffset="-14"/>
+        <circle cx="42" cy="42" r="28" fill="none" stroke="#1A9AE0" strokeWidth="12" strokeDasharray={`${r2} 176`} strokeDashoffset={-(14+r1)}/>
+        <circle cx="42" cy="42" r="28" fill="none" stroke="#E84855" strokeWidth="12" strokeDasharray={`${r3} 176`} strokeDashoffset={-(14+r1+r2)}/>
+        <text x="42" y="46" textAnchor="middle" fontSize="12" fontWeight="700" fill="#F0F4F8">{tot}</text>
+      </svg>
+      <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
+        {[["#1DB8A0","נכנסות",ib.length],["#1A9AE0","יוצאות",ob.length],["#E84855","לא נענו",ms.length]].map(([col,lbl,val])=>
+          <div key={lbl} style={{display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:12}}>
+            <div style={{display:"flex",alignItems:"center",gap:5,color:T.muted}}><div style={{width:7,height:7,borderRadius:"50%",background:col}}/>{lbl}</div>
+            <strong style={{color:lbl==="לא נענו"?"#F0827A":"#F0F4F8"}}>{val}</strong>
+          </div>
+        )}
+      </div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,marginTop:9}}>
+      {[["משך ממוצע",mmss(dur),"#F0F4F8"],["שיעור מענה",rate+"%",rate>=80?T.teal:T.gold],["לא נענו",ms.length,T.red]].map(([l,v,c])=>
+        <div key={l} style={{background:"rgba(255,255,255,.04)",borderRadius:8,padding:"7px 8px"}}>
+          <div style={{fontSize:10,color:T.muted,marginBottom:2}}>{l}</div>
+          <div style={{fontSize:15,fontWeight:700,color:c}}>{v}</div>
+        </div>
+      )}
+    </div>
+  </>;
+}
+
+// Google Sheets CSV URLs
+const GADS_SUMMARY_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSAUdOBwDTSwcez-GnvaiQtwxN-Y4vgJmWjAM2Cr1TcigxA4eOtVxYrgsxEXgSksepgVLSZZLDIDTCD/pub?gid=1958096003&single=true&output=csv";
+const GADS_CAMPS_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSAUdOBwDTSwcez-GnvaiQtwxN-Y4vgJmWjAM2Cr1TcigxA4eOtVxYrgsxEXgSksepgVLSZZLDIDTCD/pub?gid=150483977&single=true&output=csv";
+
+async function fetchGoogleAdsData(fromStr, toStr) {
+  // שליפת Summary מ-Google Sheets
+  const summaryResp = await fetch(GADS_SUMMARY_CSV + "&t=" + Date.now());
+  const summaryText = await summaryResp.text();
+  
+  // פיענוח CSV של Summary
+  const lines = summaryText.trim().split("\n").map(l => l.split(",").map(c => c.replace(/^"|"$/g, "").trim()));
+  
+  let totalCost = 0, totalConv = 0;
+  for (const row of lines) {
+    if (row[0] && row[0].includes("הוצאות")) totalCost = parseFloat(row[1]) || 0;
+    if (row[0] && row[0].includes("לידים")) totalConv = parseFloat(row[1]) || 0;
+  }
+
+  // שליפת Campaigns מ-Google Sheets (גיליון נפרד)
+  let campaigns = [];
+  try {
+    const campResp = await fetch(GADS_CAMPS_CSV + "&t=" + Date.now());
+    const campText = await campResp.text();
+    const campLines = campText.trim().split("\n").map(l => l.split(",").map(c => c.replace(/^"|"$/g, "").trim()));
+    
+    for (let i = 1; i < campLines.length; i++) {
+      const row = campLines[i];
+      if (row.length >= 4 && row[1]) {
+        campaigns.push({
+          name: row[1],
+          cost: parseFloat(row[3]) || 0,
+          conv: parseFloat(row[4]) || 0
+        });
+      }
+    }
+  } catch(e) {}
+
+  return { totalCost, totalConv, campaigns };
+}
+
+function AdsTab({won, fromStr, toStr, label}) {
+  const [report, setReport] = useState(null);
+  const [prevReport, setPrevReport] = useState(null);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [err, setErr] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [prevFileName, setPrevFileName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [autoMode, setAutoMode] = useState(true);
+  const [uploadedAt, setUploadedAt] = useState("");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("ads_report");
+      if (saved) {
+        const j = JSON.parse(saved);
+        setReport(j.report);
+        setDateFrom(j.dateFrom || "");
+        setDateTo(j.dateTo || "");
+        setFileName(j.fileName || "");
+      }
+      const savedPrev = localStorage.getItem("ads_report_prev");
+      if (savedPrev) {
+        const j = JSON.parse(savedPrev);
+        setPrevReport(j.report);
+        setPrevFileName(j.fileName || "");
+      }
+    } catch(e) {}
+  }, []);
+
+  // שליפה אוטומטית כשמשתנה הטווח
+  useEffect(() => {
+    if (!autoMode || !fromStr || !toStr) return;
+    loadAuto();
+  }, [fromStr, toStr, autoMode]);
+
+  async function loadAuto() {
+    setLoading(true); setErr("");
+    try {
+      const data = await fetchGoogleAdsData(fromStr, toStr);
+      setReport(data);
+      setFileName(""); // מצב אוטומטי — אין שם קובץ
+      try { localStorage.setItem("ads_report", JSON.stringify({report:data, dateFrom:fromStr, dateTo:toStr, fileName:""})); } catch(e) {}
+    } catch(ex) {
+      setErr("שגיאה בשליפת נתוני Google Ads: " + ex.message);
+      setAutoMode(false); // עבור למצב ידני אם יש שגיאה
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function saveState(r, f, t, fn) {
+    const uploaded = new Date().toLocaleString("he-IL");
+    setReport(r); setDateFrom(f); setDateTo(t); setFileName(fn); setUploadedAt(uploaded);
+    try { localStorage.setItem("ads_report", JSON.stringify({report:r, dateFrom:f, dateTo:t, fileName:fn, uploadedAt:uploaded})); } catch(e) {}
+  }
+
+  function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setErr("");
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try { const parsed = parseGoogleAdsCSV(ev.target.result); saveState(parsed, dateFrom, dateTo, file.name); }
+      catch(ex) { setErr(ex.message || "שגיאה בקריאת הקובץ"); }
+    };
+    reader.onerror = () => setErr("שגיאה בקריאת הקובץ");
+    reader.readAsText(file, "UTF-8");
+    e.target.value = "";
+  }
+
+  function handlePrevFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const parsed = parseGoogleAdsCSV(ev.target.result);
+        setPrevReport(parsed); setPrevFileName(file.name);
+        try { localStorage.setItem("ads_report_prev", JSON.stringify({report:parsed, fileName:file.name})); } catch(e) {}
+      } catch(ex) { setErr(ex.message || "שגיאה בקריאת קובץ השוואה"); }
+    };
+    reader.readAsText(file, "UTF-8");
+    e.target.value = "";
+  }
+
+  function clearReport() {
+    setReport(null); setFileName(""); setUploadedAt("");
+    try { localStorage.removeItem("ads_report"); } catch(e) {}
+  }
+
+  function clearPrevReport() {
+    setPrevReport(null); setPrevFileName("");
+    try { localStorage.removeItem("ads_report_prev"); } catch(e) {}
+  }
+
+  // עסקאות שנסגרו בטווח
+  const matchedDeals = (() => {
+    if (!dateFrom || !dateTo || !won) return [];
+    const lo = dateFrom <= dateTo ? dateFrom : dateTo;
+    const hi = dateFrom <= dateTo ? dateTo : dateFrom;
+    return won.filter(x => x.won_time && x.won_time.substring(0,10) >= lo && x.won_time.substring(0,10) <= hi);
+  })();
+
+  // x.value מגיע מ-Pipedrive בדולרים — ממירים לשקלים להשוואה מול הוצאות Google Ads שגם בשקלים
+  const revenue = matchedDeals.reduce((s,x) => s + (Number(x.value)||0) * ILS_TO_USD, 0);
+  const cpl = report && report.totalConv > 0 ? report.totalCost / report.totalConv : 0;
+  const roi = report && report.totalCost > 0 && revenue > 0 ? revenue / report.totalCost : null;
+  const costPerWon = report && matchedDeals.length > 0 ? report.totalCost / matchedDeals.length : null;
+  // אחוז המרה: עסקאות שנסגרו מתוך לידים מגוגל (לא מ-Pipedrive כולו)
+  const convRate = report && report.totalConv > 0 && matchedDeals.length >= 0 ? (matchedDeals.length / report.totalConv * 100) : null;
+
+  // השוואה לחודש קודם
+  const prevCpl = prevReport && prevReport.totalConv > 0 ? prevReport.totalCost / prevReport.totalConv : null;
+  const pctChange = (curr, prev) => prev && prev > 0 ? ((curr - prev) / prev * 100).toFixed(1) : null;
+  const arrow = (curr, prev, lowerIsBetter=true) => {
+    if(!prev) return null;
+    const better = lowerIsBetter ? curr < prev : curr > prev;
+    return <span style={{fontSize:10,color:better?T.teal:T.red,marginRight:4}}>{curr<prev?"▼":"▲"} {Math.abs(pctChange(curr,prev))}%</span>;
+  };
+
+  const inputStyle = {background:T.navyCard,border:"1px solid "+T.border,color:"#F0F4F8",fontSize:12,padding:"6px 10px",borderRadius:6};
+
+  return <div>
+    <div style={{...card,marginBottom:12}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <div style={ct}>נתוני Google Ads — {label||"טווח נבחר"}</div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {autoMode && <button onClick={loadAuto} disabled={loading}
+            style={{background:T.teal,color:"#06251f",fontWeight:600,fontSize:11,padding:"4px 12px",borderRadius:6,border:"none",cursor:"pointer"}}>
+            {loading?"⏳ טוען...":"↻ רענן"}
+          </button>}
+          <button onClick={()=>setAutoMode(!autoMode)}
+            style={{background:autoMode?"rgba(29,184,160,.1)":"rgba(255,255,255,.05)",color:autoMode?T.teal:T.muted,fontSize:11,padding:"4px 10px",borderRadius:6,border:"1px solid "+(autoMode?T.teal:T.border),cursor:"pointer"}}>
+            {autoMode?"🔄 אוטומטי":"📁 ידני"}
+          </button>
+        </div>
+      </div>
+
+      {autoMode && loading && <Alert type="gold">⏳ שולף נתונים מ-Google Ads...</Alert>}
+      {autoMode && !loading && report && <div style={{fontSize:10,color:T.muted}}>נתונים לתקופה: {fromStr} עד {toStr}</div>}
+
+      {!autoMode && <div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:10}}>
+          <div>
+            <div style={{fontSize:11,color:T.muted,marginBottom:6}}>📄 דוח נוכחי</div>
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              <label style={{...inputStyle,cursor:"pointer",background:T.teal,color:"#06251f",fontWeight:600,border:"none"}}>
+                📁 בחר קובץ CSV
+                <input type="file" accept=".csv" onChange={handleFile} style={{display:"none"}}/>
+              </label>
+              {fileName && <span style={{fontSize:11,color:T.muted}}>{fileName}</span>}
+              {report && <button onClick={clearReport} style={{...inputStyle,cursor:"pointer",color:T.red}}>🗑</button>}
+            </div>
+          </div>
+          <div>
+            <div style={{fontSize:11,color:T.muted,marginBottom:6}}>📄 דוח השוואה (חודש קודם)</div>
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              <label style={{...inputStyle,cursor:"pointer",background:T.navyMid,color:T.muted,fontWeight:600}}>
+                📁 בחר קובץ CSV
+                <input type="file" accept=".csv" onChange={handlePrevFile} style={{display:"none"}}/>
+              </label>
+              {prevFileName && <span style={{fontSize:11,color:T.muted}}>{prevFileName}</span>}
+              {prevReport && <button onClick={clearPrevReport} style={{...inputStyle,cursor:"pointer",color:T.red}}>🗑</button>}
+            </div>
+          </div>
+        </div>
+        <div style={{marginTop:8}}>
+          <div style={{fontSize:11,color:T.muted,marginBottom:6}}>תקופת ההשוואה מול Pipedrive:</div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+            <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={inputStyle}/>
+            <span style={{fontSize:11,color:T.muted}}>עד</span>
+            <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={inputStyle}/>
+          </div>
+        </div>
+      </div>}
+      {err && <div style={{marginTop:8}}><Alert type="red">⚠️ {err}</Alert></div>}
+    </div>
+
+    {!report && <Alert type="gold">📊 טרם הועלה דוח. העלה קובץ CSV של "Campaigns" שהורד מ-Google Ads.</Alert>}
+
+    {report && <>
+      {dateFrom && dateTo && matchedDeals.length===0 && <Alert type="gold">⚠️ לא נמצאו עסקאות שנסגרו בטווח שנבחר</Alert>}
+
+      {/* KPIs ראשיים */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:10}}>
+        <Kpi label="💸 הוצאות" value={fmtILS(report.totalCost)} delta={prevReport?<>{arrow(report.totalCost,prevReport.totalCost)} לעומת חודש קודם</>:undefined}/>
+        <Kpi label="👥 לידים" value={Math.round(report.totalConv)} color={T.teal} delta={prevReport?<>{arrow(report.totalConv,prevReport.totalConv,false)} לעומת חודש קודם</>:undefined}/>
+        <Kpi label="💰 CPL" value={fmtILS(cpl)} delta={prevReport&&prevCpl?<>{arrow(cpl,prevCpl)} לעומת חודש קודם</>:undefined}/>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:10}}>
+        <Kpi label="✅ ROI" value={roi!==null?roi.toFixed(1)+"x":"—"} color={T.gold} dc={T.gold} delta={roi===null?"בחר תאריכים":undefined}/>
+        <Kpi label="🎯 עלות לסגירה" value={costPerWon?fmtILS(costPerWon):"—"} color={T.teal} delta={costPerWon?undefined:"בחר תאריכים"}/>
+        <Kpi label="📈 אחוז המרה" value={convRate?convRate.toFixed(1)+"%":"—"} color={convRate&&convRate>5?T.teal:T.gold} delta={convRate?"מליד לסגירה":undefined}/>
+      </div>
+
+      {/* פירוט קמפיינים עם CPL */}
+      {report.campaigns && report.campaigns.length > 0 && <div style={{...card,marginTop:10}}>
+        <div style={ct}>פירוט קמפיינים</div>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+          <thead><tr>
+            {["קמפיין","הוצאות","לידים","CPL","% מסה״כ"].map(h=>
+              <th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"4px 8px 8px",borderBottom:"1px solid "+T.border,fontSize:10}}>{h}</th>
+            )}
+          </tr></thead>
+          <tbody>{report.campaigns.sort((a,b)=>b.cost-a.cost).map((c,i)=>{
+            const campCpl = c.conv > 0 ? c.cost / c.conv : 0;
+            const pct = report.totalCost > 0 ? Math.round(c.cost / report.totalCost * 100) : 0;
+            const campCplColor = campCpl > 0 && cpl > 0 ? (campCpl <= cpl ? T.teal : T.red) : T.muted;
+            return <tr key={i} style={{borderBottom:"1px solid "+T.border}}>
+              <td style={{padding:"7px 8px",fontSize:11,color:"#F0F4F8"}}>{c.name}</td>
+              <td style={{padding:"7px 8px",color:T.gold,fontWeight:600}}>{fmtILS(c.cost)}</td>
+              <td style={{padding:"7px 8px",color:T.teal}}>{Math.round(c.conv)}</td>
+              <td style={{padding:"7px 8px",fontWeight:600,color:campCplColor}}>{campCpl>0?fmtILS(campCpl):"–"}</td>
+              <td style={{padding:"7px 8px"}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <div style={{flex:1,height:5,background:"rgba(255,255,255,.06)",borderRadius:3,overflow:"hidden",minWidth:40}}>
+                    <div style={{width:pct+"%",height:5,background:T.gold,borderRadius:3}}/>
+                  </div>
+                  <span style={{fontSize:10,color:T.muted,minWidth:28}}>{pct}%</span>
+                </div>
+              </td>
+            </tr>;
+          })}</tbody>
+        </table>
+      </div>}
+    </>}
+  </div>;
+}
+
+function LeadsTable({open, sm, um, filterAgent, filterStage}) {
+  const [colTitle, setColTitle] = useState("");
+  const [colSource, setColSource] = useState("");
+  const [colTrip, setColTrip] = useState("");
+  const [colStage, setColStage] = useState("");
+  const [colAgent, setColAgent] = useState("");
+  const [colStatus, setColStatus] = useState("all");
+
+  const colInputStyle={width:"100%",background:"rgba(0,0,0,.2)",border:"1px solid "+T.border,color:"#F0F4F8",fontSize:10,padding:"3px 6px",borderRadius:4,direction:"rtl"};
+
+  const rows = open
+    .filter(d=>filterAgent==="all"||(String(d.user_id?.id||d.user_id))===filterAgent)
+    .filter(d=>filterStage==="all"||String(d.stage_id)===filterStage)
+    .map(d=>({...d,_d:daysIn(d),_tripCode:d[F_TOUR_CODE]||"",_source:SOURCE_OPTIONS[String(d[F_SOURCE])]||d[F_SOURCE]||"–",_agent:(um[d.user_id?.id||d.user_id]||"–").split(" ")[0]}))
+    .filter(d=>!colTitle||d.title?.toLowerCase().includes(colTitle.toLowerCase()))
+    .filter(d=>!colSource||d._source?.toLowerCase().includes(colSource.toLowerCase()))
+    .filter(d=>!colTrip||d._tripCode?.toLowerCase().includes(colTrip.toLowerCase()))
+    .filter(d=>!colStage||(sm[d.stage_id]||"").toLowerCase().includes(colStage.toLowerCase()))
+    .filter(d=>!colAgent||d._agent?.toLowerCase().includes(colAgent.toLowerCase()))
+    .filter(d=>{
+      if(colStatus==="all") return true;
+      if(colStatus==="stuck") return d._d>14;
+      if(colStatus==="waiting") return d._d>7&&d._d<=14;
+      if(colStatus==="active") return d._d<=7;
+      return true;
+    })
+    .sort((a,b)=>b._d-a._d);
+
+  if(!open.length) return <div style={{color:T.muted,fontSize:12,textAlign:"center",padding:"1.5rem"}}>אין עסקאות</div>;
+
+  return <div style={{overflowX:"auto"}}>
+    <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,tableLayout:"fixed"}}>
+      <colgroup><col width="22%"/><col width="13%"/><col width="13%"/><col width="14%"/><col width="9%"/><col width="6%"/><col width="9%"/><col width="14%"/></colgroup>
+      <thead>
+        <tr>{["שם עסקה","מקור הגעה","קוד טיול","שלב","ערך","ימים","נציג","סטטוס"].map(h=>
+          <th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"4px 6px 6px",borderBottom:"none",fontSize:10,textTransform:"uppercase"}}>{h}</th>
+        )}</tr>
+        <tr>
+          <th style={{padding:"0 6px 8px",borderBottom:"1px solid "+T.border}}><input value={colTitle} onChange={e=>setColTitle(e.target.value)} placeholder="סנן..." style={colInputStyle}/></th>
+          <th style={{padding:"0 6px 8px",borderBottom:"1px solid "+T.border}}><input value={colSource} onChange={e=>setColSource(e.target.value)} placeholder="סנן..." style={colInputStyle}/></th>
+          <th style={{padding:"0 6px 8px",borderBottom:"1px solid "+T.border}}><input value={colTrip} onChange={e=>setColTrip(e.target.value)} placeholder="סנן..." style={colInputStyle}/></th>
+          <th style={{padding:"0 6px 8px",borderBottom:"1px solid "+T.border}}><input value={colStage} onChange={e=>setColStage(e.target.value)} placeholder="סנן..." style={colInputStyle}/></th>
+          <th style={{padding:"0 6px 8px",borderBottom:"1px solid "+T.border}}></th>
+          <th style={{padding:"0 6px 8px",borderBottom:"1px solid "+T.border}}></th>
+          <th style={{padding:"0 6px 8px",borderBottom:"1px solid "+T.border}}><input value={colAgent} onChange={e=>setColAgent(e.target.value)} placeholder="סנן..." style={colInputStyle}/></th>
+          <th style={{padding:"0 6px 8px",borderBottom:"1px solid "+T.border}}>
+            <select value={colStatus} onChange={e=>setColStatus(e.target.value)} style={{...colInputStyle,cursor:"pointer"}}>
+              <option value="all">הכל</option>
+              <option value="active">פעיל</option>
+              <option value="waiting">ממתין</option>
+              <option value="stuck">תקוע</option>
+            </select>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.length===0&&<tr><td colSpan={8} style={{padding:"1.5rem",textAlign:"center",color:T.muted,fontSize:12}}>אין תוצאות</td></tr>}
+        {rows.map(d=>{
+          const di=d._d;
+          const [bl,bbg,bc]=di>14?[`תקוע ${di}י'`,"rgba(232,72,85,.15)","#F0827A"]:di>7?[`ממתין ${di}י'`,"rgba(240,180,41,.15)",T.gold]:["פעיל","rgba(29,184,160,.15)",T.teal];
+          return <tr key={d.id} style={{borderBottom:"1px solid "+T.border}}>
+            <td style={{padding:"8px 6px",fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(d.title||"").substring(0,22)}</td>
+            <td style={{padding:"8px 6px",color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{String(d._source).substring(0,12)}</td>
+            <td style={{padding:"8px 6px"}}>{d._tripCode?<span style={{fontSize:10,padding:"2px 7px",borderRadius:10,background:"rgba(123,104,238,.1)",color:"#9B8FFF"}}>{d._tripCode}</span>:"–"}</td>
+            <td style={{padding:"8px 6px"}}><span style={{fontSize:10,padding:"2px 7px",borderRadius:10,background:"rgba(29,184,160,.1)",color:T.teal}}>{(sm[d.stage_id]||"–").substring(0,12)}</span></td>
+            <td style={{padding:"8px 6px",color:T.teal,fontWeight:600}}>{fmt(d.value)}</td>
+            <td style={{padding:"8px 6px",color:di>7?T.gold:T.muted}}>{di}</td>
+            <td style={{padding:"8px 6px",color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d._agent}</td>
+            <td style={{padding:"8px 6px"}}><span style={{fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:20,background:bbg,color:bc}}>{bl}</span></td>
+          </tr>;
+        })}
+      </tbody>
+    </table>
+    <div style={{fontSize:11,color:T.muted,marginTop:8}}>{rows.length} עסקאות מוצגות מתוך {open.length}</div>
+  </div>;
+}
+
+// נציגים פעילים + סגירות
+function AgentStats({open, won, um}) {
+  const stats={};
+  open.forEach(d=>{
+    const uid=d.user_id?.id||d.user_id;
+    const name=um[uid]||"";
+    if(!isActive(name)) return;
+    if(!stats[uid]) stats[uid]={name,open:0,won:0,wonVal:0};
+    stats[uid].open++;
+  });
+  won.forEach(d=>{
+    const uid=d.user_id?.id||d.user_id;
+    const name=um[uid]||"";
+    if(!isActive(name)) return;
+    if(!stats[uid]) stats[uid]={name,open:0,won:0,wonVal:0};
+    stats[uid].won++;
+    stats[uid].wonVal+=Number(d.value)||0;
+  });
+  const arr=Object.values(stats).sort((a,b)=>b.won-a.won);
+  if(!arr.length) return <div style={{color:T.muted,fontSize:12}}>אין נציגים</div>;
+
+  return <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+    <thead>
+      <tr>
+        <th style={{textAlign:"right",padding:"4px 6px 8px",color:T.muted,fontSize:10,textTransform:"uppercase",borderBottom:"1px solid "+T.border}}>נציג</th>
+        <th style={{textAlign:"center",padding:"4px 6px 8px",color:T.muted,fontSize:10,textTransform:"uppercase",borderBottom:"1px solid "+T.border}}>פתוחות</th>
+        <th style={{textAlign:"center",padding:"4px 6px 8px",color:T.muted,fontSize:10,textTransform:"uppercase",borderBottom:"1px solid "+T.border}}>נסגרו</th>
+        <th style={{textAlign:"left",padding:"4px 6px 8px",color:T.muted,fontSize:10,textTransform:"uppercase",borderBottom:"1px solid "+T.border}}>ערך נסגר</th>
+      </tr>
+    </thead>
+    <tbody>
+      {arr.map((u,i)=>{
+        const init=u.name.split(" ").map(w=>w[0]||"").join("").substring(0,2).toUpperCase();
+        return <tr key={u.name} style={{borderBottom:"1px solid "+T.border}}>
+          <td style={{padding:"9px 6px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{width:26,height:26,borderRadius:"50%",background:COLORS[i%6]+"22",color:COLORS[i%6],display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,flexShrink:0}}>{init}</div>
+              <span style={{fontSize:12,fontWeight:600}}>{u.name.split(" ")[0]}</span>
+            </div>
+          </td>
+          <td style={{padding:"9px 6px",textAlign:"center",color:T.muted,fontWeight:600}}>{u.open}</td>
+          <td style={{padding:"9px 6px",textAlign:"center"}}>
+            <span style={{display:"inline-block",padding:"3px 10px",borderRadius:20,background:"rgba(29,184,160,.15)",color:T.teal,fontWeight:700,fontSize:12}}>{u.won}</span>
+          </td>
+          <td style={{padding:"9px 6px",textAlign:"left",color:T.gold,fontWeight:700}}>{fmt(u.wonVal)}</td>
+        </tr>;
+      })}
+    </tbody>
+  </table>;
+}
+
+// מלאי
+function ProductsTab({products, codeMap}) {
+  const [search,setSearch]       = useState("");
+  const [invFreeOnly,setInvFreeOnly] = useState(false);
+  const [invTripCode,setInvTripCode] = useState("all");
+  const [invRoomType,setInvRoomType] = useState("all");
+  const [colName,setColName]     = useState("");
+  const [colCode,setColCode]     = useState("");
+  const [colRoom,setColRoom]     = useState("");
+  const [colDateFrom,setColDateFrom] = useState("");
+  const [colDateTo,setColDateTo]     = useState("");
+
+  const F_FREE  = "e3799fcad3543e1361f596e6ba63a4e93b05fb41";
+  const F_USED  = "e72bd51506f19955a82bc8073b6478cf69e50bbb";
+  const F_TOTAL = "8037c7753cb6e2aa2c8088c90f71139df06e6116";
+  const F_DEPARTURE = "cfe03801231d2fbc0afc5bde16025716fd240099"; // תאריך יציאה
+
+  const roomColors={"פנימי":"#1A9AE0","חלון":"#1DB8A0","מרפסת":"#F0B429","דק עליון":"#7B68EE","דק אמצעי":"#F06292"};
+  const getRoomColor=rt=>{for(const [k,v] of Object.entries(roomColors))if(rt&&rt.includes(k))return v;return"#888";};
+
+  const fmtDate = ds => {
+    if(!ds) return "–";
+    const d = new Date(ds);
+    if(isNaN(d)) return ds;
+    return d.toLocaleDateString("he-IL",{day:"2-digit",month:"2-digit",year:"numeric"});
+  };
+
+  const parsed=products.map(p=>{
+    const parts=(p.name||"").split("-");
+    const code=parts[0]||"";
+    const tripNum=parts[1]||"";
+    const roomType=parts.slice(2).join("-")||"";
+    const free=Number(p[F_FREE])||Number(p.quantity_available)||0;
+    const used=Number(p[F_USED])||Number(p.quantity_used)||0;
+    const total=Number(p[F_TOTAL])||free+used;
+    const departureDate=p[F_DEPARTURE]||"";
+    return{...p,code,tripNum,roomType,tripName:codeMap[code]||"",free,used,total,departureDate};
+  });
+
+  // רק טיולים עם תאריך יציאה מ-1/1/2026 ואילך (מוצרים בלי תאריך יציאה לא מוצגים)
+  const MIN_DATE = "2026-01-01";
+  const parsed2026 = parsed.filter(p => p.departureDate && p.departureDate >= MIN_DATE);
+
+  const allCodes=[...new Set(parsed2026.map(p=>p.code))].sort();
+  const allRoomTypes=[...new Set(parsed2026.map(p=>p.roomType).filter(Boolean))].sort();
+
+  const filtered=parsed2026.filter(p=>{
+    const q=search.toLowerCase();
+    const matchSearch=!q||p.name.toLowerCase().includes(q)||p.tripName.toLowerCase().includes(q)||p.roomType.toLowerCase().includes(q);
+    const matchFree=!invFreeOnly||p.free>0;
+    const matchCode=invTripCode==="all"||p.code===invTripCode;
+    const matchRoom=invRoomType==="all"||p.roomType===invRoomType;
+    const matchColName=!colName||p.name.toLowerCase().includes(colName.toLowerCase());
+    const matchColCode=!colCode||p.code.toLowerCase().includes(colCode.toLowerCase());
+    const matchColRoom=!colRoom||p.roomType.toLowerCase().includes(colRoom.toLowerCase());
+    const matchColDateFrom=!colDateFrom||(p.departureDate&&p.departureDate>=colDateFrom);
+    const matchColDateTo=!colDateTo||(p.departureDate&&p.departureDate<=colDateTo);
+    return matchSearch&&matchFree&&matchCode&&matchRoom&&matchColName&&matchColCode&&matchColRoom&&matchColDateFrom&&matchColDateTo;
+  });
+
+  // מיון: תאריך יציאה הקרוב ביותר קודם (ללא תאריך – בסוף הרשימה)
+  filtered.sort((a,b)=>{
+    if(!a.departureDate && !b.departureDate) return 0;
+    if(!a.departureDate) return 1;
+    if(!b.departureDate) return -1;
+    return new Date(a.departureDate) - new Date(b.departureDate);
+  });
+
+  const totalFree=parsed2026.reduce((s,p)=>s+p.free,0);
+  const totalUsed=parsed2026.reduce((s,p)=>s+p.used,0);
+  const trips=[...new Set(parsed2026.map(p=>p.tripNum))].length;
+
+  const colInputStyle={width:"100%",background:T.navy,border:"1px solid "+T.border,color:"#F0F4F8",fontSize:10,padding:"3px 6px",borderRadius:4,direction:"rtl"};
+
+  return <div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
+      <Kpi label="🛳️ מוצרים" value={parsed2026.length} delta="חדרים במלאי"/>
+      <Kpi label="🗺️ טיולים" value={trips}/>
+      <Kpi label="✅ פנויים" value={totalFree} color={T.teal} dc={T.teal}/>
+      <Kpi label="🔒 תפוסים" value={totalUsed} color={T.gold} dc={T.gold}/>
+    </div>
+    <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap",alignItems:"center"}}>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 חפש..."
+        style={{background:T.navyCard,border:"1px solid "+T.border,color:"#F0F4F8",fontSize:12,padding:"8px 12px",borderRadius:8,flex:1,minWidth:150,direction:"rtl"}}/>
+      <select value={invTripCode} onChange={e=>setInvTripCode(e.target.value)}
+        style={{background:T.navyCard,border:"1px solid "+T.border,color:"#F0F4F8",fontSize:12,padding:"7px 10px",borderRadius:6,cursor:"pointer"}}>
+        <option value="all">כל הקודים</option>
+        {allCodes.map(c=><option key={c} value={c}>{c}{codeMap[c]?" – "+codeMap[c]:""}</option>)}
+      </select>
+      <select value={invRoomType} onChange={e=>setInvRoomType(e.target.value)}
+        style={{background:T.navyCard,border:"1px solid "+T.border,color:"#F0F4F8",fontSize:12,padding:"7px 10px",borderRadius:6,cursor:"pointer"}}>
+        <option value="all">כל סוגי חדר</option>
+        {allRoomTypes.map(r=><option key={r} value={r}>{r}</option>)}
+      </select>
+      <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:T.teal,cursor:"pointer",whiteSpace:"nowrap"}}>
+        <input type="checkbox" checked={invFreeOnly} onChange={e=>setInvFreeOnly(e.target.checked)} style={{cursor:"pointer"}}/>
+        פנויים בלבד
+      </label>
+    </div>
+    <div style={{fontSize:11,color:T.muted,marginBottom:8}}>{filtered.length} מוצרים מוצגים</div>
+    <div style={{overflowX:"auto"}}>
+      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+        <thead>
+          <tr>{["שם מוצר","קוד","סוג חדר","תאריך יציאה","פנויים","תפוסים","סה״כ"].map(h=>
+            <th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"6px 8px 4px",borderBottom:"1px solid "+T.border,fontSize:10,textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>
+          )}</tr>
+          <tr>
+            <th style={{padding:"0 8px 8px",borderBottom:"1px solid "+T.border}}><input value={colName} onChange={e=>setColName(e.target.value)} placeholder="סנן..." style={colInputStyle}/></th>
+            <th style={{padding:"0 8px 8px",borderBottom:"1px solid "+T.border}}><input value={colCode} onChange={e=>setColCode(e.target.value)} placeholder="סנן..." style={colInputStyle}/></th>
+            <th style={{padding:"0 8px 8px",borderBottom:"1px solid "+T.border}}><input value={colRoom} onChange={e=>setColRoom(e.target.value)} placeholder="סנן..." style={colInputStyle}/></th>
+            <th style={{padding:"0 8px 8px",borderBottom:"1px solid "+T.border}}>
+              <div style={{display:"flex",gap:3}}>
+                <input type="date" value={colDateFrom} onChange={e=>setColDateFrom(e.target.value)} style={{...colInputStyle,fontSize:9,padding:"3px 2px"}}/>
+                <input type="date" value={colDateTo} onChange={e=>setColDateTo(e.target.value)} style={{...colInputStyle,fontSize:9,padding:"3px 2px"}}/>
+              </div>
+            </th>
+            <th style={{padding:"0 8px 8px",borderBottom:"1px solid "+T.border}}></th>
+            <th style={{padding:"0 8px 8px",borderBottom:"1px solid "+T.border}}></th>
+            <th style={{padding:"0 8px 8px",borderBottom:"1px solid "+T.border}}></th>
+          </tr>
+        </thead>
+        <tbody>{filtered.map(p=>{
+          const col=getRoomColor(p.roomType);
+          return <tr key={p.id} style={{borderBottom:"1px solid "+T.border}}>
+            <td style={{padding:"8px",fontWeight:500,fontSize:11}}>{p.name||"–"}</td>
+            <td style={{padding:"8px"}}>
+              <div style={{fontSize:12,fontWeight:600,color:T.teal}}>{p.code}</div>
+              {p.tripName&&<div style={{fontSize:10,color:T.muted}}>{p.tripName}</div>}
+            </td>
+            <td style={{padding:"8px"}}><span style={{fontSize:10,padding:"2px 8px",borderRadius:10,background:col+"22",color:col,fontWeight:600}}>{p.roomType||"–"}</span></td>
+            <td style={{padding:"8px",fontSize:11,color:T.muted,whiteSpace:"nowrap"}}>{fmtDate(p.departureDate)}</td>
+            <td style={{padding:"8px"}}><span style={{fontSize:13,fontWeight:700,color:p.free>0?T.teal:T.red}}>{p.free}</span></td>
+            <td style={{padding:"8px",color:T.muted}}>{p.used}</td>
+            <td style={{padding:"8px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <div style={{flex:1,height:6,background:"rgba(255,255,255,.06)",borderRadius:3,overflow:"hidden",minWidth:40}}>
+                  <div style={{width:p.total>0?`${Math.min(100,Math.round(p.used/p.total*100))}%`:"0%",height:6,background:p.total>0&&p.used/p.total>0.8?T.red:T.teal,borderRadius:3}}/>
+                </div>
+                <span style={{fontSize:11,color:T.muted,minWidth:20}}>{p.total}</span>
+              </div>
+            </td>
+          </tr>;
+        })}</tbody>
+      </table>
+    </div>
+  </div>;
+}
+
+function DailySummaryTab({open, won, newDeals, recW, calls, acOK, ib, ob, ms, sm, um, label, fromStr, toStr}) {
+  const [aiSummary, setAiSummary] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
+  const yStr = yesterday.toISOString().split("T")[0];
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  // Yesterday's data
+  const yDeals = (newDeals||[]).filter(d=>d.add_time&&d.add_time.substring(0,10)===yStr);
+  const yWon = (won||[]).filter(d=>d.won_time&&d.won_time.substring(0,10)===yStr);
+  const yWonVal = yWon.reduce((s,d)=>s+(Number(d.value)||0),0);
+  const yCalls = (calls||[]).filter(c=>{const ts=new Date((c.started_at||c.created_at||0)*1000);return ts.toISOString().split("T")[0]===yStr;});
+  const yMissed = yCalls.filter(c=>c.missed===true||c.status==="missed"||(c.direction==="inbound"&&c.answered===false)||(c.direction==="inbound"&&!c.duration));
+  const yInbound = yCalls.filter(c=>c.direction==="inbound");
+  const yOutbound = yCalls.filter(c=>c.direction==="outbound");
+
+  // Focus areas
+  const stuck = (open||[]).filter(x=>daysIn(x)>14);
+  const waiting = (open||[]).filter(x=>daysIn(x)>7&&daysIn(x)<=14);
+  const highValue = (open||[]).sort((a,b)=>(Number(b.value)||0)-(Number(a.value)||0)).slice(0,5);
+
+  // Commitments deadlines
+  const cruiseCompanies = (() => { try { return JSON.parse(localStorage.getItem("commitment_cruise")||"[]"); } catch(e) { return []; } })();
+  const selections = (() => { try { return JSON.parse(localStorage.getItem("commitment_selections")||"{}"); } catch(e) { return {}; } })();
+
+  // Missed calls to return
+  const missedToReturn = yMissed.filter(c=>c.raw_digits||c.from||c.number).slice(0,5);
+
+  async function generateAISummary() {
+    setAiLoading(true); setAiError("");
+    try {
+      const context = {
+        yesterday: yStr,
+        newDeals: yDeals.length,
+        wonDeals: yWon.length,
+        wonValue: yWonVal,
+        totalCalls: yCalls.length,
+        inbound: yInbound.length,
+        outbound: yOutbound.length,
+        missed: yMissed.length,
+        stuckDeals: stuck.length,
+        waitingDeals: waiting.length,
+        totalOpen: (open||[]).length,
+        highValueDeals: highValue.map(d=>({title:d.title,value:d.value,days:daysIn(d),stage:sm[d.stage_id]||""})),
+        missedNumbers: missedToReturn.map(c=>c.raw_digits||c.from||c.number||"").filter(Boolean),
+      };
+
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          model:"claude-sonnet-4-6",
+          max_tokens:1000,
+          messages:[{role:"user",content:`אתה עוזר עסקי של חברת תיירות שמוכרת קרוזים וטיולים מאורגנים. כתוב סיכום יומי קצר ומעשי בעברית.
+
+נתוני אתמול (${yStr}):
+- עסקאות חדשות: ${context.newDeals}
+- עסקאות שנסגרו: ${context.wonDeals} (ערך: $${context.wonValue})
+- שיחות: ${context.totalCalls} (נכנסות: ${context.inbound}, יוצאות: ${context.outbound}, לא נענו: ${context.missed})
+
+מצב נוכחי:
+- עסקאות פתוחות: ${context.totalOpen}
+- תקועות מעל 14 יום: ${context.stuckDeals}
+- ממתינות 7-14 יום: ${context.waitingDeals}
+- עסקאות בערך גבוה: ${JSON.stringify(context.highValueDeals)}
+
+כתוב:
+1. סיכום קצר של אתמול (3-4 משפטים)
+2. 3-5 משימות מומלצות להיום (ממוקדות, פרקטיות)
+3. אם יש שיחות שלא נענו, ציין שצריך לחזור אליהן
+
+כתוב בנקודות, קצר ולעניין. אל תשתמש בכותרות גדולות.`}]
+        })
+      });
+      const data = await resp.json();
+      const text = data.content?.map(c=>c.text||"").join("\n") || "לא התקבלה תשובה";
+      setAiSummary(text);
+    } catch(ex) {
+      setAiError("שגיאה ביצירת סיכום: "+ex.message);
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  useEffect(()=>{ if(!aiSummary && !aiLoading) generateAISummary(); },[]);
+
+  const fmtDateHe = ds => { const d=new Date(ds); return d.toLocaleDateString("he-IL",{weekday:"long",day:"2-digit",month:"2-digit",year:"numeric"}); };
+
+  return <div>
+    <SecDiv color={T.gold}>🌅 סיכום יומי — {fmtDateHe(yesterday)}</SecDiv>
+
+    {/* Yesterday KPIs */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:12}}>
+      <Kpi label="📋 עסקאות חדשות" value={yDeals.length} delta="אתמול"/>
+      <Kpi label="✅ נסגרו" value={yWon.length} delta={yWonVal>0?fmt(yWonVal):""} color={T.teal} dc={T.teal}/>
+      <Kpi label="📞 שיחות" value={yCalls.length} delta={`${yInbound.length} נכנסות, ${yOutbound.length} יוצאות`}/>
+      <Kpi label="🔕 לא נענו" value={yMissed.length} color={yMissed.length>3?T.red:T.gold} dc={yMissed.length>3?T.red:T.gold}/>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      {/* AI Summary */}
+      <div style={{...card,gridColumn:aiSummary?"1":"1 / -1"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={ct}>🤖 ניתוח AI — מה קרה אתמול ומה לעשות היום</div>
+          <button onClick={generateAISummary} disabled={aiLoading}
+            style={{background:T.teal,color:"#06251f",fontWeight:600,fontSize:11,padding:"4px 12px",borderRadius:6,border:"none",cursor:"pointer"}}>
+            {aiLoading?"⏳ מנתח...":"↻ חדש"}
+          </button>
+        </div>
+        {aiLoading && <div style={{textAlign:"center",padding:"2rem",color:T.muted}}><div className="spinner"/>מנתח את הנתונים...</div>}
+        {aiError && <Alert type="red">⚠️ {aiError}</Alert>}
+        {aiSummary && <div style={{fontSize:13,color:"#F0F4F8",lineHeight:2,whiteSpace:"pre-wrap"}}>{aiSummary}</div>}
+      </div>
+
+      {/* Action items */}
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        {/* Stuck deals */}
+        {stuck.length>0 && <div style={card}>
+          <div style={ct}>⚠️ עסקאות תקועות ({stuck.length})</div>
+          {stuck.sort((a,b)=>daysIn(b)-daysIn(a)).slice(0,5).map(d=>
+            <div key={d.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:"1px solid "+T.border}}>
+              <div>
+                <div style={{fontSize:11,color:"#F0F4F8"}}>{(d.title||"").substring(0,25)}</div>
+                <div style={{fontSize:10,color:T.muted}}>{sm[d.stage_id]||""} · {(um[d.user_id?.id||d.user_id]||"").split(" ")[0]}</div>
+              </div>
+              <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:10,background:"rgba(232,72,85,.15)",color:T.red}}>{daysIn(d)} ימים</span>
+            </div>
+          )}
+          {stuck.length>5 && <div style={{fontSize:10,color:T.muted,marginTop:4}}>+{stuck.length-5} נוספות</div>}
+        </div>}
+
+        {/* Missed calls to return */}
+        {missedToReturn.length>0 && <div style={card}>
+          <div style={ct}>📵 שיחות לא נענו — לחזור אליהן</div>
+          {missedToReturn.map((c,i)=>{
+            const num=c.raw_digits||c.from||c.number||"–";
+            const ts=new Date((c.started_at||c.created_at||0)*1000);
+            return <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:"1px solid "+T.border}}>
+              <span style={{fontSize:12,color:"#F0F4F8"}}>{String(num).substring(0,16)}</span>
+              <span style={{fontSize:10,color:T.muted}}>{ts.toLocaleTimeString("he-IL",{hour:"2-digit",minute:"2-digit"})}</span>
+            </div>;
+          })}
+        </div>}
+
+        {/* High value deals */}
+        {highValue.length>0 && <div style={card}>
+          <div style={ct}>💎 עסקאות בערך גבוה</div>
+          {highValue.map(d=>
+            <div key={d.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:"1px solid "+T.border}}>
+              <div>
+                <div style={{fontSize:11,color:"#F0F4F8"}}>{(d.title||"").substring(0,25)}</div>
+                <div style={{fontSize:10,color:T.muted}}>{sm[d.stage_id]||""}</div>
+              </div>
+              <span style={{fontSize:12,fontWeight:600,color:T.teal}}>{fmt(d.value)}</span>
+            </div>
+          )}
+        </div>}
+      </div>
+    </div>
+  </div>;
+}
+
+function CommitmentsTab({products, codeMap}) {
+  const [selections, setSelections] = useState(() => {
+    try { const s = localStorage.getItem("commitment_selections"); return s ? JSON.parse(s) : {}; } catch(e) { return {}; }
+  });
+
+  // Load company data from localStorage (with MSC default)
+  const DEFAULT_CRUISE = [{name:"MSC Cruises",commission:"13% ממחיר הבסיס",payments:[{description:"מקדמה: $50 לנוסע (מינימום $100 לחדר) — בחתימה"},{description:"15% ממחיר ההפלגה — לא יאוחר מ-120 יום לפני ההפלגה"},{description:"50% ממחיר ההפלגה — לא יאוחר מ-65 יום לפני ההפלגה"},{description:"15% + יתרה — לא יאוחר מ-30 יום לפני ההפלגה"}],cancellation:[{days:"120+",penalty:"מקדמה בלבד ($50/נוסע)"},{days:"119-65",penalty:"15% ממחיר ההפלגה"},{days:"64-31",penalty:"50% ממחיר ההפלגה"},{days:"30-16",penalty:"70% ממחיר ההפלגה"},{days:"15 ומטה",penalty:"100% ממחיר ההפלגה"}],notes:"נוסע חופשי אחרי 20 נוסעים משלמים. ביטול חדר אחד מקבוצה של 10+ חדרים מעל 65 יום — ללא דמי ביטול. תשלומי חובה: מסי נמל $200/אדם, דמי טיפול $80/חדר, דמי שירות $84/אדם."}];
+  const cruiseCompanies = (() => { try { const d=JSON.parse(localStorage.getItem("commitment_cruise")||"[]"); return d.length?d:DEFAULT_CRUISE; } catch(e) { return DEFAULT_CRUISE; } })();
+  const airlineCompanies = (() => { try { return JSON.parse(localStorage.getItem("commitment_airline") || "[]"); } catch(e) { return []; } })();
+
+  const F_FREE  = "e3799fcad3543e1361f596e6ba63a4e93b05fb41";
+  const F_USED  = "e72bd51506f19955a82bc8073b6478cf69e50bbb";
+  const F_TOTAL = "8037c7753cb6e2aa2c8088c90f71139df06e6116";
+  const F_DEPARTURE = "cfe03801231d2fbc0afc5bde16025716fd240099";
+  const MIN_DATE = "2026-01-01";
+
+  // Parse and aggregate products by trip code
+  const tripMap = {};
+  (products || []).forEach(p => {
+    const parts = (p.name || "").split("-");
+    const code = parts[0] || "";
+    const free = Number(p[F_FREE]) || Number(p.quantity_available) || 0;
+    const used = Number(p[F_USED]) || Number(p.quantity_used) || 0;
+    const total = Number(p[F_TOTAL]) || free + used;
+    const dep = p[F_DEPARTURE] || "";
+    if (!dep || dep < MIN_DATE) return;
+    if (!tripMap[code]) tripMap[code] = { code, name: codeMap[code] || "", totalRooms: 0, soldRooms: 0, freeRooms: 0, departureDate: dep };
+    tripMap[code].totalRooms += total;
+    tripMap[code].soldRooms += used;
+    tripMap[code].freeRooms += free;
+    if (dep < tripMap[code].departureDate) tripMap[code].departureDate = dep;
+  });
+
+  const todayStr = new Date().toISOString().split("T")[0];
+  const trips = Object.values(tripMap).filter(t => t.departureDate >= todayStr && t.totalRooms > 0).sort((a, b) => a.departureDate.localeCompare(b.departureDate));
+
+  const fmtDate = ds => { if (!ds) return "–"; const d = new Date(ds); if (isNaN(d)) return ds; return d.toLocaleDateString("he-IL", {day:"2-digit",month:"2-digit",year:"numeric"}); };
+  const diffDays = ds => Math.ceil((new Date(ds) - new Date()) / 86400000);
+
+  function updateSelection(code, field, value) {
+    const next = { ...selections, [code]: { ...(selections[code] || {}), [field]: value } };
+    setSelections(next);
+    try { localStorage.setItem("commitment_selections", JSON.stringify(next)); } catch(e) {}
+  }
+
+  const totalRooms = trips.reduce((s, t) => s + t.totalRooms, 0);
+  const totalSold = trips.reduce((s, t) => s + t.soldRooms, 0);
+  const totalFree = trips.reduce((s, t) => s + t.freeRooms, 0);
+
+  return <div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
+      <Kpi label="🗺️ טיולים" value={trips.length} delta="עם תאריך יציאה"/>
+      <Kpi label="🚪 סה״כ חדרים" value={totalRooms}/>
+      <Kpi label="✅ נמכרו" value={totalSold} color={T.teal} dc={T.teal}/>
+      <Kpi label="⏳ נשארו למכירה" value={totalFree} color={T.gold} dc={T.gold}/>
+    </div>
+
+    {cruiseCompanies.length === 0 && airlineCompanies.length === 0 && <Alert type="gold">⚠️ טרם הוגדרו חברות שייט/תעופה. <a href="commitments.html" style={{color:T.teal,fontWeight:600}}>לחץ כאן להגדרה</a></Alert>}
+
+    <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
+      <a href="commitments.html" style={{fontSize:11,color:T.teal,textDecoration:"none",padding:"5px 12px",borderRadius:6,border:"1px solid rgba(29,184,160,.2)",background:"rgba(29,184,160,.08)"}}>⚙️ ניהול חברות</a>
+    </div>
+
+    <div style={{overflowX:"auto"}}>
+      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+        <thead><tr>
+          {["שם המוצר","תאריך יציאה","חדרים","נמכרו","נשאר","חברת שייט","תנאי התחייבות שייט","חברת תעופה","תנאי התחייבות תעופה"].map(h=>
+            <th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"6px 8px 8px",borderBottom:"1px solid "+T.border,fontSize:10,whiteSpace:"nowrap",verticalAlign:"top"}}>{h}</th>
+          )}
+        </tr></thead>
+        <tbody>
+          {trips.length === 0 && <tr><td colSpan={9} style={{textAlign:"center",color:T.muted,padding:"2rem"}}>אין מוצרים</td></tr>}
+          {trips.map(t => {
+            const sel = selections[t.code] || {};
+            const selectedCruise = cruiseCompanies.find(c => c.name === sel.cruise);
+            const selectedAirline = airlineCompanies.find(c => c.name === sel.airline);
+            const daysLeft = diffDays(t.departureDate);
+            const freeColor = t.freeRooms === 0 ? T.teal : t.freeRooms <= 3 ? T.gold : T.muted;
+
+            const calcDates = (z) => {
+              const depDate = new Date(t.departureDate);
+              const nums = z.days.match(/\d+/g);
+              let dateStr = ""; let inZone = false;
+              if(nums && nums.length >= 2){
+                const d1 = new Date(depDate); d1.setDate(d1.getDate() - parseInt(nums[0]));
+                const d2 = new Date(depDate); d2.setDate(d2.getDate() - parseInt(nums[1]));
+                dateStr = d2.toLocaleDateString("he-IL",{day:"2-digit",month:"2-digit"})+" — "+d1.toLocaleDateString("he-IL",{day:"2-digit",month:"2-digit"});
+                inZone = daysLeft <= parseInt(nums[0]) && daysLeft >= parseInt(nums[1]);
+              } else if(nums && nums.length === 1){
+                const d1 = new Date(depDate); d1.setDate(d1.getDate() - parseInt(nums[0]));
+                if(z.days.includes("+")||z.days.includes("מעל")){
+                  dateStr = "עד "+d1.toLocaleDateString("he-IL",{day:"2-digit",month:"2-digit"});
+                  inZone = daysLeft >= parseInt(nums[0]);
+                } else {
+                  dateStr = d1.toLocaleDateString("he-IL",{day:"2-digit",month:"2-digit"})+" ואילך";
+                  inZone = daysLeft <= parseInt(nums[0]);
+                }
+              }
+              const zoneColor = inZone ? (z.penalty.includes("100")?"#B71C1C":z.penalty.includes("70")?T.red:z.penalty.includes("50")?"#F06292":z.penalty.includes("15")?T.gold:T.teal) : T.muted;
+              return {dateStr, inZone, zoneColor};
+            };
+
+            return <tr key={t.code} style={{borderBottom:"1px solid "+T.border,verticalAlign:"top"}}>
+              <td style={{padding:"8px"}}>
+                <div style={{fontWeight:600,color:"#F0F4F8"}}>{t.code}</div>
+                {t.name && <div style={{fontSize:10,color:T.muted}}>{t.name}</div>}
+              </td>
+              <td style={{padding:"8px",fontSize:11,color:T.muted,whiteSpace:"nowrap"}}>
+                {fmtDate(t.departureDate)}
+                <div style={{fontSize:10,color:daysLeft>90?T.teal:daysLeft>30?T.gold:T.red}}>{daysLeft} ימים</div>
+              </td>
+              <td style={{padding:"8px",fontWeight:600,color:"#F0F4F8"}}>{t.totalRooms}</td>
+              <td style={{padding:"8px",fontWeight:600,color:T.teal}}>{t.soldRooms}</td>
+              <td style={{padding:"8px",fontWeight:600,color:freeColor}}>{t.freeRooms}</td>
+              <td style={{padding:"8px"}}>
+                <select value={sel.cruise||""} onChange={e=>updateSelection(t.code,"cruise",e.target.value)}
+                  style={{background:T.navy,border:"1px solid "+T.border,color:sel.cruise?"#F0F4F8":T.muted,fontSize:11,padding:"4px 6px",borderRadius:6,cursor:"pointer",width:"100%",minWidth:90}}>
+                  <option value="">בחר...</option>
+                  {cruiseCompanies.map(c=><option key={c.name} value={c.name}>{c.name}</option>)}
+                </select>
+              </td>
+              <td style={{padding:"8px"}}>
+                {selectedCruise ? (() => {
+                  const currentZone = (selectedCruise.cancellation||[]).find(z => {
+                    const {inZone} = calcDates(z);
+                    return inZone;
+                  });
+                  if(currentZone){
+                    const {dateStr,zoneColor} = calcDates(currentZone);
+                    return <div style={{fontSize:10,padding:"4px 8px",borderRadius:6,background:zoneColor+"20",border:"1px solid "+zoneColor,whiteSpace:"nowrap"}}>
+                      <span style={{color:zoneColor,fontWeight:700}}>{currentZone.penalty}</span>
+                      {dateStr && <div style={{color:T.muted,fontSize:9,marginTop:2}}>{dateStr}</div>}
+                    </div>;
+                  }
+                  return <span style={{fontSize:10,color:T.muted}}>–</span>;
+                })() : <span style={{fontSize:10,color:T.muted}}>–</span>}
+              </td>
+              <td style={{padding:"8px"}}>
+                <select value={sel.airline||""} onChange={e=>updateSelection(t.code,"airline",e.target.value)}
+                  style={{background:T.navy,border:"1px solid "+T.border,color:sel.airline?"#F0F4F8":T.muted,fontSize:11,padding:"4px 6px",borderRadius:6,cursor:"pointer",width:"100%",minWidth:90}}>
+                  <option value="">בחר...</option>
+                  {airlineCompanies.map(c=><option key={c.name} value={c.name}>{c.name}</option>)}
+                </select>
+              </td>
+              <td style={{padding:"8px"}}>
+                {selectedAirline ? (() => {
+                  const currentZone = (selectedAirline.cancellation||[]).find(z => {
+                    const {inZone} = calcDates(z);
+                    return inZone;
+                  });
+                  if(currentZone){
+                    const {dateStr,zoneColor} = calcDates(currentZone);
+                    return <div style={{fontSize:10,padding:"4px 8px",borderRadius:6,background:zoneColor+"20",border:"1px solid "+zoneColor,whiteSpace:"nowrap"}}>
+                      <span style={{color:zoneColor,fontWeight:700}}>{currentZone.penalty}</span>
+                      {dateStr && <div style={{color:T.muted,fontSize:9,marginTop:2}}>{dateStr}</div>}
+                    </div>;
+                  }
+                  return <span style={{fontSize:10,color:T.muted}}>–</span>;
+                })() : <span style={{fontSize:10,color:T.muted}}>–</span>}
+              </td>
+            </tr>;
+          })}
+        </tbody>
+      </table>
+    </div>
+  </div>;
+}
+
+function MainTabInner({open, won, pVal, sm, um, calls, acOK}) {
+  const [days, setDays] = useState("this_month");
+  const {fromStr,toStr,label} = calcRange(days);
+  const newDeals = open.filter(d=>d.add_time&&d.add_time.substring(0,10)>=fromStr&&d.add_time.substring(0,10)<=toStr);
+  const recW = won.filter(x=>x.won_time&&x.won_time.substring(0,10)>=fromStr&&x.won_time.substring(0,10)<=toStr);
+  const fCalls = filterCalls(calls, fromStr, toStr);
+  const ib = fCalls.filter(c=>c.direction==="inbound");
+  const ob = fCalls.filter(c=>c.direction==="outbound");
+  const ms = fCalls.filter(c=>c.missed===true||c.status==="missed"||(c.direction==="inbound"&&c.answered===false)||(c.direction==="inbound"&&!c.duration));
+  const ans = fCalls.filter(c=>c.answered===true||(c.duration>0&&c.status!=="missed"));
+  const dur = ans.length?Math.round(ans.reduce((s,c)=>s+(c.duration||0),0)/ans.length):0;
+  const rate = fCalls.length?Math.round((fCalls.length-ms.length)/fCalls.length*100):0;
+  const stuck = open.filter(x=>daysIn(x)>14).length;
+
+  return <div>
+    <div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}><DateFilter value={days} onChange={setDays}/></div>
+    {stuck>0&&<Alert type="red">⚠️ {stuck} עסקאות תקועות מעל 14 ימים</Alert>}
+    <SecDiv>Pipedrive – סיכום</SecDiv>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
+      <Kpi label="📋 עסקאות חדשות" value={newDeals.length} delta={label}/>
+      <Kpi label="📂 עסקאות פתוחות" value={open.length} delta="סה״כ ב-pipeline"/>
+      <Kpi label="✅ נסגרו" value={recW.length} delta={label} dc={T.teal}/>
+      <Kpi label="💰 ערך pipeline" value={fmt(pVal)} color={T.gold} dc={T.gold}/>
+    </div>
+    <SecDiv color={T.gold}>Aircall – שיחות</SecDiv>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
+      <Kpi label="📞 סה״כ שיחות" value={acOK?fCalls.length:"–"} delta={label}/>
+      <Kpi label="📲 נכנסות" value={acOK?ib.length:"–"} dc={T.teal}/>
+      <Kpi label="📤 יוצאות" value={acOK?ob.length:"–"} color={T.gold}/>
+      <Kpi label="🔕 לא נענו" value={acOK?ms.length:"–"} delta={"מענה "+rate+"%"} color={T.red} dc={T.red}/>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:10}}>
+      <div style={card}><div style={ct}>משפך מכירות</div><Funnel open={open} sm={sm}/></div>
+      <div style={card}><div style={ct}>שיחות Aircall</div><Donut calls={fCalls} ib={ib} ob={ob} ms={ms} dur={dur} rate={rate} ok={acOK}/></div>
+      <div style={card}><div style={ct}>ערך לפי שלב</div>
+        {(()=>{const sv={};open.forEach(x=>{const n=sm[x.stage_id]||"אחר";sv[n]=(sv[n]||0)+(Number(x.value)||0);});
+        return Object.entries(sv).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([n,v])=>
+          <div key={n} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid "+T.border}}>
+            <span style={{fontSize:11,color:T.muted}}>{n.substring(0,18)}</span>
+            <span style={{fontSize:12,fontWeight:600,color:T.teal}}>{fmt(v)}</span>
+          </div>)})()}
+      </div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+      <div style={card}><div style={ct}>נציגים – פתוחות וסגירות</div><AgentStats open={open} won={recW} um={um}/></div>
+      <div style={card}><div style={ct}>נסגרו לאחרונה</div>
+        {won.sort((a,b)=>new Date(b.won_time||0)-new Date(a.won_time||0)).slice(0,5).map(x=>{
+          const tripCode=x[F_TOUR_CODE]||"";
+          return <div key={x.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid "+T.border}}>
+            <div><div style={{fontSize:11,color:T.muted}}>{(x.title||"").substring(0,28)}</div>
+              {tripCode&&<span style={{fontSize:10,padding:"2px 7px",borderRadius:10,background:"rgba(123,104,238,.1)",color:"#9B8FFF",marginTop:2,display:"inline-block"}}>{tripCode}</span>}
+            </div>
+            <span style={{fontSize:12,fontWeight:600,color:T.teal}}>{fmt(x.value)}</span>
+          </div>;
+        })}
+        {!won.length&&<div style={{color:T.muted,fontSize:12}}>אין עסקאות</div>}
+      </div>
+    </div>
+  </div>;
+}
+
+function AircallTabInner({allCalls}) {
+  const [days, setDays] = useState("today");
+  const {fromStr,toStr,label} = calcRange(days);
+  const calls = filterCalls(allCalls, fromStr, toStr);
+  const ib = calls.filter(c=>c.direction==="inbound");
+  const ob = calls.filter(c=>c.direction==="outbound");
+  const ms = calls.filter(c=>c.missed===true||c.status==="missed"||(c.direction==="inbound"&&c.answered===false)||(c.direction==="inbound"&&!c.duration));
+  const ans = calls.filter(c=>c.answered===true||(c.duration>0&&c.status!=="missed"));
+  const dur = ans.length?Math.round(ans.reduce((s,c)=>s+(c.duration||0),0)/ans.length):0;
+  const rate = calls.length?Math.round((calls.length-ms.length)/calls.length*100):0;
+
+  const agentStats={};
+  calls.forEach(c=>{const name=c.user?.name||c.user?.email||"לא ידוע";if(!agentStats[name])agentStats[name]={name,total:0,inbound:0,outbound:0,missed:0,duration:0,answered:0};agentStats[name].total++;if(c.direction==="inbound")agentStats[name].inbound++;if(c.direction==="outbound")agentStats[name].outbound++;const isMissed=c.missed===true||c.status==="missed"||(c.direction==="inbound"&&c.answered===false)||(c.direction==="inbound"&&!c.duration);if(isMissed)agentStats[name].missed++;else{agentStats[name].answered++;agentStats[name].duration+=(c.duration||0);}});
+  const agentArr=Object.values(agentStats).sort((a,b)=>b.total-a.total);
+  const hourStats=Array(24).fill(0);calls.forEach(c=>{const h=new Date((c.started_at||c.created_at||0)*1000).getHours();hourStats[h]++;});const maxHour=Math.max(...hourStats,1);
+  const missedCalls=ms;
+
+  return <div>
+    <div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}><DateFilter value={days} onChange={setDays}/></div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
+      <Kpi label="📞 סה״כ שיחות" value={calls.length} delta={label}/><Kpi label="📲 נכנסות" value={ib.length} color={T.teal} dc={T.teal}/><Kpi label="📤 יוצאות" value={ob.length} color={T.gold} dc={T.gold}/><Kpi label="🔕 לא נענו" value={ms.length} delta={"מענה "+rate+"%"} color={T.red} dc={T.red}/>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:10}}>
+      <Kpi label="⏱️ משך ממוצע" value={mmss(dur)} delta="שיחות שנענו"/><Kpi label="✅ שיחות שנענו" value={calls.length-ms.length} color={T.teal}/><Kpi label="📊 שיעור מענה" value={rate+"%"} color={rate>=80?T.teal:T.gold} dc={rate>=80?T.teal:T.gold}/>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+      <div style={card}><div style={ct}>ביצועים לפי נציג</div>{agentArr.length===0?<div style={{color:T.muted,fontSize:12}}>אין נתונים</div>:<table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr>{["נציג","סה״כ","נכנסות","יוצאות","לא נענו","מענה %"].map(h=><th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"4px 6px 8px",borderBottom:"1px solid "+T.border,fontSize:10}}>{h}</th>)}</tr></thead><tbody>{agentArr.map((a,i)=><tr key={a.name} style={{borderBottom:"1px solid "+T.border}}><td style={{padding:"7px 6px",fontWeight:600,fontSize:11}}>{a.name.split(" ")[0]||a.name}</td><td style={{padding:"7px 6px",color:T.muted}}>{a.total}</td><td style={{padding:"7px 6px",color:T.teal}}>{a.inbound}</td><td style={{padding:"7px 6px",color:T.gold}}>{a.outbound}</td><td style={{padding:"7px 6px",color:a.missed>0?T.red:T.muted}}>{a.missed}</td><td style={{padding:"7px 6px"}}><span style={{fontSize:11,fontWeight:600,color:a.total>0&&(a.total-a.missed)/a.total>=0.8?T.teal:T.gold}}>{a.total>0?Math.round((a.total-a.missed)/a.total*100):0}%</span></td></tr>)}</tbody></table>}</div>
+      <div style={card}><div style={ct}>שיחות לא נענו ({missedCalls.length})</div>{missedCalls.length===0?<div style={{color:T.muted,fontSize:12}}>אין שיחות שלא נענו 🎉</div>:<div style={{maxHeight:220,overflowY:"auto"}}>{missedCalls.slice(0,20).map((c,i)=>{const ts=new Date((c.started_at||c.created_at||0)*1000);const timeStr=ts.toLocaleTimeString("he-IL",{hour:"2-digit",minute:"2-digit"});const dateStr=ts.toLocaleDateString("he-IL",{day:"2-digit",month:"2-digit"});const num=c.raw_digits||c.from||c.number||"–";return <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid "+T.border}}><div><div style={{fontSize:12,color:"#F0F4F8",fontWeight:500}}>{String(num).substring(0,16)}</div><div style={{fontSize:10,color:T.muted}}>{dateStr} {timeStr}</div></div><span style={{fontSize:10,padding:"2px 8px",borderRadius:10,background:"rgba(232,72,85,.15)",color:T.red}}>לא נענה</span></div>;})}</div>}</div>
+    </div>
+    <div style={{...card,marginBottom:10}}><div style={ct}>עומס לפי שעה ביום</div><div style={{display:"flex",gap:3,alignItems:"flex-end",height:80}}>{hourStats.map((count,h)=>(<div key={h} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}><div style={{width:"100%",background:count>0?T.teal:"rgba(255,255,255,.05)",borderRadius:"3px 3px 0 0",height:count>0?`${Math.round(count/maxHour*64)+4}px`:"4px",transition:"height .3s"}}/>{h%4===0&&<div style={{fontSize:9,color:T.muted}}>{h}:00</div>}</div>))}</div></div>
+    <div style={card}><div style={ct}>רשימת שיחות ({calls.length})</div><div style={{maxHeight:300,overflowY:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr>{["מספר","כיוון","סטטוס","משך","שעה","נציג"].map(h=><th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"4px 6px 8px",borderBottom:"1px solid "+T.border,fontSize:10,position:"sticky",top:0,background:T.navyCard}}>{h}</th>)}</tr></thead><tbody>{calls.slice(0,50).map((c,i)=>{const isMissed=c.missed===true||c.status==="missed"||(c.direction==="inbound"&&c.answered===false)||(c.direction==="inbound"&&!c.duration);const ts=new Date((c.started_at||c.created_at||0)*1000);const timeStr=ts.toLocaleString("he-IL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});const num=c.raw_digits||c.from||c.number||"–";const agentName=(c.user?.name||c.user?.email||"–").split(" ")[0];return <tr key={i} style={{borderBottom:"1px solid "+T.border}}><td style={{padding:"6px",fontSize:11}}>{String(num).substring(0,16)}</td><td style={{padding:"6px"}}><span style={{fontSize:10,color:c.direction==="inbound"?T.teal:T.gold}}>{c.direction==="inbound"?"נכנסת":"יוצאת"}</span></td><td style={{padding:"6px"}}><span style={{fontSize:10,padding:"2px 6px",borderRadius:8,background:isMissed?"rgba(232,72,85,.15)":"rgba(29,184,160,.15)",color:isMissed?T.red:T.teal}}>{isMissed?"לא נענה":"נענה"}</span></td><td style={{padding:"6px",color:T.muted}}>{c.duration?mmss(c.duration):"–"}</td><td style={{padding:"6px",color:T.muted,fontSize:10}}>{timeStr}</td><td style={{padding:"6px",color:T.muted}}>{agentName}</td></tr>;})}</tbody></table></div></div>
+  </div>;
+}
+
+function AdsTabWrapper({won}) {
+  const [days, setDays] = useState("this_month");
+  const {fromStr,toStr,label} = calcRange(days);
+  return <div>
+    <div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}><DateFilter value={days} onChange={v=>setDays(v)}/></div>
+    <AdsTab won={won} fromStr={fromStr} toStr={toStr} label={label}/>
+  </div>;
+}
+
+function calcRange(days) {
+  const today=new Date();
+  const localDate=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  const todayStr=localDate(today);
+  if(days==="today") return {fromStr:todayStr,toStr:todayStr,label:"היום"};
+  if(days==="yesterday"){const y=new Date(today);y.setDate(y.getDate()-1);return{fromStr:localDate(y),toStr:localDate(y),label:"אתמול"};}
+  if(days==="this_week"){const d=new Date(today);d.setDate(d.getDate()-d.getDay());return{fromStr:localDate(d),toStr:todayStr,label:"השבוע"};}
+  if(days==="last_week"){const end=new Date(today);end.setDate(end.getDate()-end.getDay()-1);const start=new Date(end);start.setDate(start.getDate()-6);return{fromStr:localDate(start),toStr:localDate(end),label:"שבוע שעבר"};}
+  if(days==="this_month") return{fromStr:todayStr.substring(0,7)+"-01",toStr:todayStr,label:"החודש"};
+  if(days==="last_month"){const d=new Date(today.getFullYear(),today.getMonth()-1,1);const de=new Date(today.getFullYear(),today.getMonth(),0);return{fromStr:localDate(d),toStr:localDate(de),label:"חודש שעבר"};}
+  const p=new Date(today);p.setDate(p.getDate()-Number(days||30));return{fromStr:localDate(p),toStr:todayStr,label:days+" ימים"};
+}
+
+function DateFilter({value, onChange}) {
+  return <select value={value} onChange={e=>onChange(e.target.value)}
+    style={{background:T.navyCard,border:"1px solid "+T.border,color:"#F0F4F8",fontSize:12,padding:"5px 10px",borderRadius:6,cursor:"pointer"}}>
+    <option value="today">היום</option>
+    <option value="yesterday">אתמול</option>
+    <option value="this_week">השבוע הזה</option>
+    <option value="last_week">שבוע שעבר</option>
+    <option value="this_month">החודש הזה</option>
+    <option value="last_month">חודש שעבר</option>
+    <option value="7">7 ימים אחרונים</option>
+    <option value="90">רבעון</option>
+  </select>;
+}
+
+function filterCalls(calls, fromStr, toStr) {
+  return (calls||[]).filter(c=>{
+    const ts=new Date((c.started_at||c.created_at||0)*1000);
+    const localDate=ts.getFullYear()+"-"+String(ts.getMonth()+1).padStart(2,"0")+"-"+String(ts.getDate()).padStart(2,"0");
+    return localDate>=fromStr&&localDate<=toStr;
+  });
+}
+
+function SeoTab() {
+  // Demo data
+  const demoQueries = [
+    {query:"תרבותו סיול",clicks:142,impressions:2800,ctr:"5.1%",pos:3.2},
+    {query:"טיולים לקוריאה",clicks:98,impressions:3200,ctr:"3.1%",pos:6.8},
+    {query:"סיול מדריך",clicks:87,impressions:1900,ctr:"4.6%",pos:4.1},
+    {query:"טיול מאורגן לקוריאה",clicks:76,impressions:2100,ctr:"3.6%",pos:5.5},
+    {query:"קוריאה חופשה",clicks:65,impressions:2400,ctr:"2.7%",pos:8.2},
+    {query:"מה לעשות בסיול",clicks:54,impressions:1600,ctr:"3.4%",pos:7.1},
+    {query:"טיסות לקוריאה",clicks:43,impressions:1800,ctr:"2.4%",pos:11.3},
+    {query:"אטרקציות בקוריאה",clicks:38,impressions:1400,ctr:"2.7%",pos:9.4},
+  ];
+  const demoPages = [
+    {page:"/korea-tours",title:"טיולים לקוריאה",clicks:245,impressions:4200,ctr:"5.8%",pos:4.2},
+    {page:"/seoul-guide",title:"מדריך סיול",clicks:189,impressions:3100,ctr:"6.1%",pos:3.8},
+    {page:"/",title:"דף הבית",clicks:156,impressions:5600,ctr:"2.8%",pos:8.1},
+    {page:"/blog/korea-tips",title:"טיפים לטיול בקוריאה",clicks:98,impressions:2300,ctr:"4.3%",pos:6.5},
+    {page:"/contact",title:"צור קשר",clicks:67,impressions:1200,ctr:"5.6%",pos:5.2},
+  ];
+  const dailyData = [
+    {d:"01/06",c:42,i:890},{d:"02/06",c:38,i:920},{d:"03/06",c:55,i:1100},
+    {d:"04/06",c:48,i:980},{d:"05/06",c:61,i:1250},{d:"06/06",c:53,i:1180},
+    {d:"07/06",c:67,i:1340},{d:"08/06",c:72,i:1420},{d:"09/06",c:58,i:1290},
+    {d:"10/06",c:76,i:1510},{d:"11/06",c:69,i:1380},{d:"12/06",c:83,i:1620},
+    {d:"13/06",c:79,i:1550},{d:"14/06",c:91,i:1700},
+  ];
+  const maxC = Math.max(...dailyData.map(x=>x.c));
+  const maxI = Math.max(...dailyData.map(x=>x.i));
+
+  const [seoView, setSeoView] = useState("queries");
+
+  return <div>
+    {/* Demo Banner */}
+    <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",borderRadius:8,fontSize:12,marginBottom:10,background:"rgba(240,180,41,.08)",border:"1px solid rgba(240,180,41,.25)",color:T.gold}}>
+      ⚠️ תצוגת דמו — הנתונים כאן לדוגמה בלבד. ברגע שה-Search Console יחובר, הנתונים האמיתיים יופיעו אוטומטית.
+    </div>
+
+    {/* KPIs */}
+    <SecDiv>Google Search Console — ביצועים אורגניים (דמו)</SecDiv>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
+      <Kpi label="🖱️ קליקים" value="892" delta="▲ 18.3% מהתקופה הקודמת" dc={T.teal}/>
+      <Kpi label="👁️ חשיפות" value="18,560" delta="▲ 12.7% מהתקופה הקודמת" color={T.gold} dc={T.teal}/>
+      <Kpi label="📊 CTR ממוצע" value="4.8%" delta="▲ 5.2% מהתקופה הקודמת" color="#7B68EE" dc={T.teal}/>
+      <Kpi label="📍 מיקום ממוצע" value="9.8" delta="▼ שיפור מ-11.4" color="#1A9AE0" dc={T.teal}/>
+    </div>
+
+    {/* Chart - clicks trend */}
+    <div style={{...card,marginBottom:10}}>
+      <div style={ct}>מגמת קליקים — 14 ימים אחרונים</div>
+      <div style={{display:"flex",gap:2,alignItems:"flex-end",height:100,padding:"8px 0"}}>
+        {dailyData.map((x,i)=>(
+          <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+            <div style={{fontSize:9,color:"#F0F4F8",fontWeight:600}}>{x.c}</div>
+            <div style={{width:"100%",background:T.teal,borderRadius:"3px 3px 0 0",height:`${Math.round(x.c/maxC*70)+4}px`,transition:"height .3s",opacity:0.85}}/>
+            <div style={{fontSize:8,color:T.muted}}>{x.d.split("/")[0]}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    {/* Toggle: queries vs pages */}
+    <div style={{display:"flex",gap:6,marginBottom:10}}>
+      <button onClick={()=>setSeoView("queries")}
+        style={{background:seoView==="queries"?T.teal:"transparent",color:seoView==="queries"?"#06251f":T.muted,fontSize:12,padding:"6px 14px",borderRadius:6,border:seoView==="queries"?"none":"1px solid "+T.border,cursor:"pointer",fontWeight:600}}>
+        🔍 מילות חיפוש
+      </button>
+      <button onClick={()=>setSeoView("pages")}
+        style={{background:seoView==="pages"?T.teal:"transparent",color:seoView==="pages"?"#06251f":T.muted,fontSize:12,padding:"6px 14px",borderRadius:6,border:seoView==="pages"?"none":"1px solid "+T.border,cursor:"pointer",fontWeight:600}}>
+        📄 דפים מובילים
+      </button>
+    </div>
+
+    {/* Table */}
+    <div style={card}>
+      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+        <thead><tr>
+          {(seoView==="queries"?["מילת חיפוש","קליקים","חשיפות","CTR","מיקום"]:["דף","קליקים","חשיפות","CTR","מיקום"]).map(h=>
+            <th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"4px 8px 8px",borderBottom:"1px solid "+T.border,fontSize:10}}>{h}</th>
+          )}
+        </tr></thead>
+        <tbody>
+          {(seoView==="queries"?demoQueries:demoPages).map((item,i)=>{
+            const posColor = item.pos<=5?T.teal:item.pos<=10?T.gold:T.red;
+            return <tr key={i} style={{borderBottom:"1px solid "+T.border}}>
+              <td style={{padding:"7px 8px",fontSize:11,color:"#F0F4F8"}}>
+                {seoView==="queries"?item.query:<div><div>{item.title}</div><div style={{fontSize:10,color:T.muted}}>{item.page}</div></div>}
+              </td>
+              <td style={{padding:"7px 8px",color:T.teal,fontWeight:600}}>{item.clicks}</td>
+              <td style={{padding:"7px 8px",color:T.muted}}>{item.impressions.toLocaleString()}</td>
+              <td style={{padding:"7px 8px",color:T.muted}}>{item.ctr}</td>
+              <td style={{padding:"7px 8px"}}>
+                <span style={{fontSize:11,padding:"2px 8px",borderRadius:10,background:`${posColor}20`,color:posColor,fontWeight:600}}>{item.pos}</span>
+              </td>
+            </tr>;
+          })}
+        </tbody>
+      </table>
+    </div>
+
+    {/* Devices + Insights */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
+      <div style={card}>
+        <div style={ct}>התפלגות מכשירים</div>
+        {[{name:"מובייל",pct:62,color:T.teal},{name:"דסקטופ",pct:31,color:"#1A9AE0"},{name:"טאבלט",pct:7,color:T.gold}].map(d=>
+          <div key={d.name} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+            <div style={{width:60,fontSize:11,color:T.muted}}>{d.name}</div>
+            <div style={{flex:1,height:14,background:"rgba(255,255,255,.05)",borderRadius:4,overflow:"hidden"}}>
+              <div style={{width:d.pct+"%",height:"100%",background:d.color,borderRadius:4,display:"flex",alignItems:"center",justifyContent:"flex-end",paddingLeft:6}}>
+                <span style={{fontSize:10,color:"#fff",fontWeight:600}}>{d.pct}%</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      <div style={card}>
+        <div style={ct}>תובנות מהירות</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{padding:"8px 10px",background:"rgba(29,184,160,.08)",borderRadius:6,borderRight:"3px solid "+T.teal}}>
+            <div style={{fontSize:11,fontWeight:600,color:T.teal}}>מילת חיפוש מובילה</div>
+            <div style={{fontSize:11,color:T.muted}}>"תרבותו סיול" — מיקום 3.2</div>
+          </div>
+          <div style={{padding:"8px 10px",background:"rgba(123,104,238,.08)",borderRadius:6,borderRight:"3px solid #7B68EE"}}>
+            <div style={{fontSize:11,fontWeight:600,color:"#9B8FFF"}}>דף עם הכי הרבה קליקים</div>
+            <div style={{fontSize:11,color:T.muted}}>טיולים לקוריאה — 245 קליקים</div>
+          </div>
+          <div style={{padding:"8px 10px",background:"rgba(240,180,41,.08)",borderRadius:6,borderRight:"3px solid "+T.gold}}>
+            <div style={{fontSize:11,fontWeight:600,color:T.gold}}>הזדמנות לשיפור</div>
+            <div style={{fontSize:11,color:T.muted}}>"טיסות לקוריאה" — מיקום 11.3, הרבה חשיפות</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
+function App() {
+  const [tab,setTab]         = useState("daily");
+  const [loading,setLoading] = useState(true);
+  const [status,setStatus]   = useState("טוען...");
+  const [data,setData]       = useState(null);
+  const [errs,setErrs]       = useState([]);
+  const [codeMap,setCodeMap] = useState({});
+  const [filterAgent,setFilterAgent] = useState("all");
+  const [filterStage,setFilterStage] = useState("all");
+
+  useEffect(()=>{
+    try{
+      const s=localStorage.getItem("cruise_codes");
+      if(s){const arr=JSON.parse(s);const m={};arr.forEach(c=>{m[c.code]=c.name;});setCodeMap(m);}
+    }catch(e){}
+  },[]);
+
+  const SHEET_ID = "1veKHXlA3Lb83q8vz769aJ3XJxLkFFY4yTlhKviurTjM";
+  const sheetCSV = async (name) => {
+    const url = "https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/gviz/tq?tqx=out:csv&sheet="+encodeURIComponent(name)+"&t="+Date.now();
+    const r = await fetch(url); const t = await r.text();
+    const lines = t.split("\n").filter(l=>l.trim());
+    if(lines.length<2) return [];
+    const parseCSVLine = line => { const out=[]; let cur="",inQ=false; for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){inQ=!inQ;continue;}if(c===","&&!inQ){out.push(cur);cur="";continue;}cur+=c;} out.push(cur); return out; };
+    const headers = parseCSVLine(lines[0]).map(h=>h.trim().replace(/^"|"$/g,""));
+    const rows = [];
+    for(let i=1;i<lines.length;i++){
+      const cols = parseCSVLine(lines[i]).map(c=>c.trim().replace(/^"|"$/g,""));
+      const obj = {};
+      headers.forEach((h,j)=>{ obj[h]=cols[j]||""; });
+      rows.push(obj);
+    }
+    return rows;
+  };
+
+  const load=useCallback(async()=>{
+    setLoading(true); setErrs([]); setStatus("שולף נתונים...");
+    const e=[];
+
+    try {
+      // Fetch all data from Google Sheets (fast!)
+      const [rawOpen, rawWon, rawUsers, rawStages, rawProducts, rawCalls] = await Promise.all([
+        sheetCSV("deals_open").catch(()=>[]),
+        sheetCSV("deals_won").catch(()=>[]),
+        sheetCSV("users").catch(()=>[]),
+        sheetCSV("stages").catch(()=>[]),
+        sheetCSV("products").catch(()=>[]),
+        sheetCSV("calls").catch(()=>[])
+      ]);
+
+      // Map deals back to expected format
+      const mapDeal = d => ({
+        id: Number(d.id)||0, title: d.title||"", value: Number(d.value)||0,
+        currency: d.currency||"", status: d.status||"", stage_id: Number(d.stage_id)||0,
+        user_id: {id: Number(d.user_id)||0}, add_time: d.add_time||"",
+        won_time: d.won_time||"", stage_change_time: d.stage_change_time||"",
+        [F_SOURCE]: d.source||"", [F_TOUR_CODE]: d.tour_code||""
+      });
+
+      const open = rawOpen.map(mapDeal);
+      const won = rawWon.map(mapDeal);
+      const pVal = open.reduce((s,x)=>s+(Number(x.value)||0),0);
+
+      const sm = {}; rawStages.forEach(s=>{ sm[Number(s.id)]=s.name; });
+      const um = {}; rawUsers.forEach(u=>{ um[Number(u.id)]=u.name; });
+
+      // Map calls
+      const calls = rawCalls.map(c=>({
+        id: c.id, direction: c.direction||"", status: c.status||"",
+        missed: c.missed==="TRUE", answered: c.answered==="TRUE",
+        duration: Number(c.duration)||0, started_at: Number(c.started_at)||0,
+        created_at: Number(c.started_at)||0,
+        raw_digits: c.raw_digits||"", from: c.from_number||"", number: c.from_number||"",
+        user: { name: c.user_name||"", email: c.user_email||"" }
+      }));
+
+      // Map products
+      const products = rawProducts.map(p=>({
+        id: Number(p.id)||0, name: p.name||"",
+        [F_FREE]: Number(p.free)||0, [F_USED]: Number(p.used)||0,
+        [F_TOTAL]: Number(p.total)||0, [F_DEPARTURE]: p.departure_date||"",
+        quantity_available: Number(p.free)||0, quantity_used: Number(p.used)||0
+      }));
+
+      const acOK = calls.length > 0;
+
+      setData({open,won,pVal,sm,um,calls,acOK,products});
+    } catch(ex) {
+      e.push("שגיאה בטעינה: "+ex.message);
+    }
+
+    setErrs(e);
+    setStatus("מחובר · "+new Date().toLocaleTimeString("he-IL"));
+    setLoading(false);
+  },[]);
+
+  useEffect(()=>{load();},[load]);
+  useEffect(()=>{const id=setInterval(load,5*60*1000);return()=>clearInterval(id);},[load]);
+
+  const tabs=[{id:"daily",label:"🌅 סיכום יומי"},{id:"main",label:"📊 סקירה"},{id:"leads",label:"🔥 לידים"},{id:"inventory",label:"🛳️ מלאי"},{id:"aircall",label:"📞 Aircall"},{id:"ads",label:"📢 פרסום"},{id:"commitments",label:"💼 התחייבויות"},{id:"seo",label:"🔍 SEO"}];
+
+  return <div style={{background:T.navy,minHeight:"100vh",direction:"rtl"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 18px",borderBottom:"1px solid "+T.border,background:T.navyMid,position:"sticky",top:0,zIndex:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <span style={{fontSize:17,fontWeight:700,color:T.teal}}>⚓ דשבורד מכירות</span>
+        <span style={{fontSize:12,color:T.muted}}>קרוזים מאורגנים</span>
+        <span style={{width:7,height:7,borderRadius:"50%",background:loading?T.gold:T.teal,display:"inline-block"}}/>
+        <span style={{fontSize:11,color:T.muted}}>{status}</span>
+      </div>
+      <div style={{display:"flex",gap:6,alignItems:"center"}}>
+        <button onClick={load} disabled={loading}
+          style={{background:"transparent",border:"1px solid "+T.border,color:T.muted,fontSize:12,padding:"5px 12px",borderRadius:6,cursor:"pointer"}}>
+          {loading?"...":"↻ רענן"}
+        </button>
+        <a href="commitments.html" style={{background:"rgba(240,180,41,.1)",border:"1px solid rgba(240,180,41,.2)",color:T.gold,fontSize:12,padding:"5px 12px",borderRadius:6,textDecoration:"none"}}>💼 ניהול התחייבויות</a>
+        <a href="codes.html" style={{background:"rgba(29,184,160,.1)",border:"1px solid rgba(29,184,160,.2)",color:T.teal,fontSize:12,padding:"5px 12px",borderRadius:6,textDecoration:"none"}}>⚙️ קודי טיולים</a>
+      </div>
+    </div>
+
+    <div style={{display:"flex",gap:2,padding:"8px 18px 0",borderBottom:"1px solid "+T.border,background:T.navyMid}}>
+      {tabs.map(t=><button key={t.id} onClick={()=>setTab(t.id)}
+        style={{background:tab===t.id?T.navyCard:"transparent",border:tab===t.id?"1px solid "+T.border:"1px solid transparent",borderBottom:tab===t.id?"1px solid "+T.navyCard:"none",color:tab===t.id?"#F0F4F8":T.muted,fontSize:12,padding:"7px 14px",borderRadius:"8px 8px 0 0",cursor:"pointer",fontWeight:tab===t.id?500:400,marginBottom:tab===t.id?"-1px":0}}>
+        {t.label}
+      </button>)}
+    </div>
+
+    <div style={{padding:"12px 18px"}}>
+      {loading&&!data&&<div style={{textAlign:"center",padding:"3rem",color:T.muted}}><div className="spinner"/><div>{status}</div></div>}
+      {errs.map((e,i)=><Alert key={i} type="gold">⚠️ {e}</Alert>)}
+
+      {data&&(()=>{
+        const {open,won,pVal,sm,um,calls,acOK,products}=data;
+
+        if(tab==="daily") return <DailySummaryTab open={open} won={won} newDeals={[]} recW={[]} calls={calls} acOK={acOK} ib={[]} ob={[]} ms={[]} sm={sm} um={um} label="" fromStr="" toStr=""/>;
+        if(tab==="inventory") return <ProductsTab products={products} codeMap={codeMap}/>;
+
+        if(tab==="aircall") {
+          if(!acOK) return <Alert type="gold">⚠️ Aircall לא מחובר</Alert>;
+          return <AircallTabInner allCalls={calls}/>;
+        }
+
+        if(tab==="commitments") return <CommitmentsTab products={products} codeMap={codeMap}/>;
+        if(tab==="seo") return <SeoTab/>;
+        if(tab==="ads") return <AdsTabWrapper won={won}/>;
+
+        if(tab==="main") return <MainTabInner open={open} won={won} pVal={pVal} sm={sm} um={um} calls={calls} acOK={acOK}/>;
+
+        if(tab==="leads") return <>
+            <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap",alignItems:"center"}}>
+              <select value={filterAgent} onChange={e=>setFilterAgent(e.target.value)}
+                style={{background:T.navyCard,border:"1px solid "+T.border,color:"#F0F4F8",fontSize:12,padding:"6px 10px",borderRadius:6,cursor:"pointer"}}>
+                <option value="all">כל הנציגים</option>
+                {[...new Set(open.map(d=>String(d.user_id?.id||d.user_id)))].filter(Boolean).map(id=><option key={id} value={id}>{um[id]||id}</option>)}
+              </select>
+              <select value={filterStage} onChange={e=>setFilterStage(e.target.value)}
+                style={{background:T.navyCard,border:"1px solid "+T.border,color:"#F0F4F8",fontSize:12,padding:"6px 10px",borderRadius:6,cursor:"pointer"}}>
+                <option value="all">כל השלבים</option>
+                {Object.entries(sm).map(([id,name])=><option key={id} value={id}>{name}</option>)}
+              </select>
+              <span style={{fontSize:11,color:T.muted}}>{open.length} עסקאות פתוחות</span>
+            </div>
+            <SecDiv color={T.gold}>כל העסקאות הפתוחות</SecDiv>
+            <div style={card}><LeadsTable open={open} sm={sm} um={um} filterAgent={filterAgent} filterStage={filterStage}/></div>
+          </>;
+
+        return null;
+      })()}
+    </div>
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
 </script>
 </body>
 </html>
