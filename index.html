@@ -1396,9 +1396,9 @@ function App() {
 
   const WEBAPP = "https://script.google.com/macros/s/AKfycbxxs2zysopvrG_0oQ5AI6ofoInawziuWpLUQfZ4fn1KpKXw_AVX5w20AQ4OckICCIoBFw/exec";
   const sheetJSON = async (name) => {
-    const target = WEBAPP+"?sheet="+encodeURIComponent(name);
-    const r = await fetch(WORKER+"?url="+encodeURIComponent(target));
-    return r.json();
+    const r = await fetch(WEBAPP+"?sheet="+encodeURIComponent(name), {redirect:"follow"});
+    const text = await r.text();
+    try { return JSON.parse(text); } catch(e) { return []; }
   };
 
   const load=useCallback(async()=>{
