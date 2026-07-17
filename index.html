@@ -1396,7 +1396,8 @@ function App() {
 
   const WEBAPP = "https://script.google.com/macros/s/AKfycbxxs2zysopvrG_0oQ5AI6ofoInawziuWpLUQfZ4fn1KpKXw_AVX5w20AQ4OckICCIoBFw/exec";
   const sheetJSON = async (name) => {
-    const r = await fetch(WEBAPP+"?sheet="+encodeURIComponent(name));
+    const target = WEBAPP+"?sheet="+encodeURIComponent(name);
+    const r = await fetch(WORKER+"?url="+encodeURIComponent(target));
     return r.json();
   };
 
@@ -1434,14 +1435,22 @@ function App() {
       const sm = {}; (Array.isArray(rawStages)?rawStages:[]).forEach(s=>{ sm[Number(s.id)]=s.name; });
       const um = {}; (Array.isArray(rawUsers)?rawUsers:[]).forEach(u=>{ um[Number(u.id)]=u.name; });
 
-      const calls = (Array.isArray(rawCalls)?rawCalls:[]).map(c=>({
-        id: c.id, direction: String(c.direction||""), status: String(c.status||""),
-        missed: c.missed===true||c.missed==="TRUE", answered: c.answered===true||c.answered==="TRUE",
-        duration: Number(c.duration)||0, started_at: Number(c.started_at)||0,
-        created_at: Number(c.started_at)||0,
-        raw_digits: String(c.raw_digits||""), from: String(c.from_number||""), number: String(c.from_number||""),
-        user: { name: String(c.user_name||""), email: String(c.user_email||"") }
-      }));
+      const calls = (Array.isArray(rawCalls)?rawCalls:[]).map(c=>{
+        var sa = c.started_at || c.created_at || 0;
+        // Handle both Unix timestamp (number) and date string from Google Sheets
+        if (typeof sa === "string" && sa.length > 10) {
+          sa = Math.floor(new Date(sa).getTime() / 1000);
+        } else {
+          sa = Number(sa) || 0;
+        }
+        return {
+          id: c.id, direction: String(c.direction||""), status: String(c.status||""),
+          missed: c.missed===true||c.missed==="TRUE", answered: c.answered===true||c.answered==="TRUE",
+          duration: Number(c.duration)||0, started_at: sa, created_at: sa,
+          raw_digits: String(c.raw_digits||""), from: String(c.from_number||""), number: String(c.from_number||""),
+          user: { name: String(c.user_name||""), email: String(c.user_email||"") }
+        };
+      });
 
       const products = (Array.isArray(rawProducts)?rawProducts:[]).map(p=>({
         id: Number(p.id)||0, name: p.name||"",
