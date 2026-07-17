@@ -1247,9 +1247,9 @@ function DateFilter({value, onChange}) {
 
 function filterCalls(calls, fromStr, toStr) {
   return (calls||[]).filter(c=>{
-    const ts=new Date((c.started_at||c.created_at||0)*1000);
-    const localDate=ts.getFullYear()+"-"+String(ts.getMonth()+1).padStart(2,"0")+"-"+String(ts.getDate()).padStart(2,"0");
-    return localDate>=fromStr&&localDate<=toStr;
+    const d = c.call_date || "";
+    if (!d) return false;
+    return d>=fromStr&&d<=toStr;
   });
 }
 
@@ -1458,6 +1458,7 @@ function App() {
           id: c.id, direction: String(c.direction||""), status: String(c.status||""),
           missed: c.missed===true||c.missed==="TRUE", answered: c.answered===true||c.answered==="TRUE",
           duration: Number(c.duration)||0, started_at: sa, created_at: sa,
+          call_date: String(c.call_date||""),
           raw_digits: String(c.raw_digits||""), from: String(c.from_number||""), number: String(c.from_number||""),
           user: { name: String(c.user_name||""), email: String(c.user_email||"") }
         };
