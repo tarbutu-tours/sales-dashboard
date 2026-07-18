@@ -48,6 +48,32 @@ label{font-size:12px;color:#7A9BBF;display:block;margin-bottom:4px;font-weight:5
   <a href="index.html" class="back-btn">← חזור לדשבורד</a>
 </div>
 
+<!-- Schedule + Send Now -->
+<div class="card" style="border:1px solid rgba(29,184,160,.2);margin-bottom:16px">
+  <h2 style="color:#1DB8A0;margin-bottom:12px">⏰ לוח זמנים ושליחה</h2>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+    <div style="background:#132847;border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:24px;margin-bottom:6px">🌅</div>
+      <div style="font-size:13px;font-weight:600;color:#F0F4F8">סיכום יומי</div>
+      <div style="font-size:11px;color:#7A9BBF;margin:4px 0 10px">כל בוקר 7:00-8:00</div>
+      <button class="btn" style="background:#1DB8A0;color:#fff;width:100%" onclick="sendSummary('daily')" id="btnDaily">📨 שלח עכשיו</button>
+    </div>
+    <div style="background:#132847;border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:24px;margin-bottom:6px">📊</div>
+      <div style="font-size:13px;font-weight:600;color:#F0F4F8">סיכום שבועי</div>
+      <div style="font-size:11px;color:#7A9BBF;margin:4px 0 10px">כל יום ראשון 8:00</div>
+      <button class="btn" style="background:#F0B429;color:#0B1F3A;width:100%" onclick="sendSummary('weekly')" id="btnWeekly">📨 שלח עכשיו</button>
+    </div>
+    <div style="background:#132847;border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:24px;margin-bottom:6px">📈</div>
+      <div style="font-size:13px;font-weight:600;color:#F0F4F8">סיכום חודשי</div>
+      <div style="font-size:11px;color:#7A9BBF;margin:4px 0 10px">1 לכל חודש 9:00</div>
+      <button class="btn" style="background:#7B68EE;color:#fff;width:100%" onclick="sendSummary('monthly')" id="btnMonthly">📨 שלח עכשיו</button>
+    </div>
+  </div>
+  <div class="saved-msg" id="sendStatus" style="margin-top:8px"></div>
+</div>
+
 <!-- Tabs -->
 <div class="tabs">
   <button class="tab-btn active" onclick="switchTab('daily')" id="tabDaily">🌅 סיכום יומי</button>
@@ -277,6 +303,30 @@ function switchTab(tab) {
 function showMsg(txt) {
   var el = document.getElementById("savedMsg"); el.textContent = txt;
   setTimeout(function() { el.textContent = ""; }, 3000);
+}
+
+var WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxxs2zysopvrG_0oQ5AI6ofoInawziuWpLUQfZ4fn1KpKXw_AVX5w20AQ4OckICCIoBFw/exec";
+
+async function sendSummary(type) {
+  var btn = document.getElementById("btn" + type.charAt(0).toUpperCase() + type.slice(1));
+  var status = document.getElementById("sendStatus");
+  btn.disabled = true;
+  btn.textContent = "⏳ שולח...";
+  status.textContent = "שולח סיכום " + (type === "daily" ? "יומי" : type === "weekly" ? "שבועי" : "חודשי") + "...";
+  status.style.color = "#F0B429";
+
+  try {
+    var resp = await fetch(WEBAPP_URL + "?action=send_" + type, {redirect: "follow"});
+    var text = await resp.text();
+    status.style.color = "#1DB8A0";
+    status.textContent = "✅ הסיכום נשלח בהצלחה!";
+  } catch(err) {
+    status.style.color = "#F0827A";
+    status.textContent = "❌ שגיאה: " + err.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "📨 שלח עכשיו";
+  }
 }
 
 loadSettings();
