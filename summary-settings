@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>הגדרות סיכום</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Segoe UI',Arial,sans-serif;background:#0B1F3A;color:#F0F4F8;direction:rtl;min-height:100vh;padding:1.5rem}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:10px}
+h1{font-size:18px;font-weight:600;color:#1DB8A0}
+h2{font-size:15px;font-weight:600;margin-bottom:10px}
+.sub{font-size:12px;color:#7A9BBF;margin-top:3px}
+.back-btn{font-size:12px;padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:transparent;color:#7A9BBF;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:5px}
+.back-btn:hover{border-color:#1DB8A0;color:#1DB8A0}
+.card{background:#1A3257;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:1.25rem;margin-bottom:14px}
+input,textarea{background:#132847;border:1px solid rgba(255,255,255,.1);color:#F0F4F8;font-size:13px;padding:8px 12px;border-radius:8px;font-family:inherit;direction:rtl;width:100%}
+input:focus,textarea:focus{outline:none;border-color:#1DB8A0}
+textarea{resize:vertical;min-height:80px;line-height:1.8}
+.btn{padding:8px 16px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+.btn-save{background:#1DB8A0;color:#fff;width:100%;padding:12px;margin-top:14px;font-size:14px}.btn-save:hover{background:#16967f}
+.btn-del{background:rgba(232,72,85,.12);color:#F0827A;border:1px solid rgba(232,72,85,.2);padding:4px 10px;font-size:11px;cursor:pointer;border-radius:6px}
+.btn-add{background:rgba(29,184,160,.1);color:#1DB8A0;border:1px solid rgba(29,184,160,.2);padding:6px 14px;font-size:12px;cursor:pointer;border-radius:6px;font-weight:600}
+.section-title{font-size:11px;color:#7A9BBF;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin:16px 0 10px;padding-bottom:5px;border-bottom:1px solid rgba(255,255,255,.07)}
+label{font-size:12px;color:#7A9BBF;display:block;margin-bottom:4px;font-weight:500}
+.checkbox-row{display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer}
+.checkbox-row input[type=checkbox]{width:16px;height:16px;accent-color:#1DB8A0;cursor:pointer}
+.checkbox-row span{font-size:13px;color:#F0F4F8}
+.email-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.email-row input{flex:1}
+.tag{display:inline-block;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;margin-right:4px}
+.tag-daily{background:rgba(29,184,160,.15);color:#1DB8A0}
+.tag-weekly{background:rgba(240,180,41,.15);color:#F0B429}
+.tag-monthly{background:rgba(123,104,238,.15);color:#A89AFF}
+.saved-msg{font-size:13px;color:#1DB8A0;text-align:center;margin-top:8px;min-height:20px}
+.tabs{display:flex;gap:2px;margin-bottom:14px}
+.tab-btn{padding:8px 18px;border-radius:8px 8px 0 0;border:1px solid rgba(255,255,255,.07);border-bottom:none;background:transparent;color:#7A9BBF;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit}
+.tab-btn.active{background:#1A3257;color:#F0F4F8;font-weight:600}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <h1>📋 הגדרות סיכום — יומי, שבועי, חודשי</h1>
+    <div class="sub">הגדר מה לכלול בסיכום, באילו פעולות להתמקד, ולמי לשלוח.</div>
+  </div>
+  <a href="index.html" class="back-btn">← חזור לדשבורד</a>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('daily')" id="tabDaily">🌅 סיכום יומי</button>
+  <button class="tab-btn" onclick="switchTab('weekly')" id="tabWeekly">📊 סיכום שבועי</button>
+  <button class="tab-btn" onclick="switchTab('monthly')" id="tabMonthly">📈 סיכום חודשי</button>
+  <button class="tab-btn" onclick="switchTab('emails')" id="tabEmails">✉️ רשימת מיילים</button>
+</div>
+
+<!-- Daily Summary -->
+<div id="sectionDaily">
+  <div class="card">
+    <h2 style="color:#1DB8A0">🌅 מה לכלול בסיכום היומי</h2>
+    
+    <div class="section-title">נתונים אוטומטיים</div>
+    <div class="checkbox-row"><input type="checkbox" id="d_newDeals" checked><span>עסקאות חדשות שנפתחו אתמול</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="d_wonDeals" checked><span>עסקאות שנסגרו אתמול (ערך כספי)</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="d_stuckDeals" checked><span>עסקאות תקועות מעל 14 ימים</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="d_calls" checked><span>סיכום שיחות Aircall (נכנסות, יוצאות, לא נענו)</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="d_missedCalls" checked><span>שיחות שלא נענו — מספרים לחזור אליהם</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="d_voicemail" checked><span>שיחות שהועברו למוקד הודעות</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="d_highValue" checked><span>עסקאות בערך גבוה פתוחות</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="d_commitments" checked><span>דדליינים של התחייבויות שמתקרבים</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="d_inventory"><span>סיכום מלאי — חדרים פנויים</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="d_ads"><span>ביצועי פרסום (Google Ads)</span></div>
+
+    <div class="section-title">פעולות מומלצות</div>
+    <label>מה אתה רוצה שה-AI ימליץ לך לעשות כל בוקר?</label>
+    <textarea id="d_actions" placeholder="למשל:&#10;- תעדוף שיחות חזרה ללקוחות שלא נענו&#10;- בדוק עסקאות תקועות וקדם אותן&#10;- עדכן לקוחות על מצב הזמנות&#10;- סגור עסקאות שקרובות לסגירה"></textarea>
+
+    <div class="section-title">דרישות מיוחדות</div>
+    <label>הוראות נוספות ל-AI (סגנון, דגשים, מה חשוב לך)</label>
+    <textarea id="d_custom" placeholder="למשל:&#10;- תמיד תזכיר לי לחזור ללקוחות VIP&#10;- אם יש עסקה מעל $5,000 תקועה — תדגיש באדום&#10;- תוסיף ציטוט מוטיבציה בסוף"></textarea>
+  </div>
+</div>
+
+<!-- Weekly Summary -->
+<div id="sectionWeekly" style="display:none">
+  <div class="card">
+    <h2 style="color:#F0B429">📊 מה לכלול בסיכום השבועי</h2>
+    
+    <div class="section-title">נתונים אוטומטיים</div>
+    <div class="checkbox-row"><input type="checkbox" id="w_summary" checked><span>סיכום ביצועים שבועי (עסקאות, הכנסות)</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="w_comparison" checked><span>השוואה לשבוע שעבר</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="w_agents" checked><span>ביצועי נציגים — מי הכי טוב</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="w_calls" checked><span>סיכום שיחות שבועי</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="w_stuck" checked><span>עסקאות תקועות שדורשות התערבות</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="w_inventory"><span>מצב מלאי — מה מלא, מה פנוי</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="w_commitments"><span>סטטוס התחייבויות ותשלומים</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="w_ads"><span>ביצועי פרסום שבועי</span></div>
+
+    <div class="section-title">דרישות מיוחדות</div>
+    <textarea id="w_custom" placeholder="למשל:&#10;- תן לי 3 המלצות לשבוע הבא&#10;- השווה ביצועים בין הנציגים&#10;- הדגש טיולים שצריכים דחיפה במכירות"></textarea>
+  </div>
+</div>
+
+<!-- Monthly Summary -->
+<div id="sectionMonthly" style="display:none">
+  <div class="card">
+    <h2 style="color:#7B68EE">📈 מה לכלול בסיכום החודשי</h2>
+    
+    <div class="section-title">נתונים אוטומטיים</div>
+    <div class="checkbox-row"><input type="checkbox" id="m_revenue" checked><span>סה"כ הכנסות החודש</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="m_comparison" checked><span>השוואה לחודש שעבר</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="m_deals" checked><span>כמות עסקאות שנפתחו ונסגרו</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="m_agents" checked><span>דירוג נציגים חודשי</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="m_products" checked><span>מוצרים/טיולים הכי מבוקשים</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="m_calls" checked><span>סיכום שיחות חודשי</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="m_ads"><span>ROI פרסום חודשי</span></div>
+    <div class="checkbox-row"><input type="checkbox" id="m_commitments"><span>סטטוס התחייבויות ותשלומים עתידיים</span></div>
+
+    <div class="section-title">דרישות מיוחדות</div>
+    <textarea id="m_custom" placeholder="למשל:&#10;- תן לי תחזית לחודש הבא&#10;- הדגש מגמות עולות ויורדות&#10;- המלצות אסטרטגיות"></textarea>
+  </div>
+</div>
+
+<!-- Email Recipients -->
+<div id="sectionEmails" style="display:none">
+  <div class="card">
+    <h2 style="color:#1A9AE0">✉️ רשימת מיילים לשליחה</h2>
+    <div class="sub" style="margin-bottom:14px">הוסף כתובות מייל ובחר אילו סיכומים כל אחד מקבל.</div>
+
+    <div id="emailList"></div>
+
+    <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
+      <input id="newEmail" placeholder="הכנס כתובת מייל" style="flex:1"/>
+      <div style="display:flex;gap:4px;align-items:center">
+        <label class="checkbox-row" style="padding:0"><input type="checkbox" id="newDaily" checked><span class="tag tag-daily">יומי</span></label>
+        <label class="checkbox-row" style="padding:0"><input type="checkbox" id="newWeekly"><span class="tag tag-weekly">שבועי</span></label>
+        <label class="checkbox-row" style="padding:0"><input type="checkbox" id="newMonthly"><span class="tag tag-monthly">חודשי</span></label>
+      </div>
+      <button class="btn-add" onclick="addEmail()">+ הוסף</button>
+    </div>
+  </div>
+</div>
+
+<button class="btn btn-save" onclick="saveSettings()">💾 שמור הגדרות</button>
+<div class="saved-msg" id="savedMsg"></div>
+
+<script>
+var settings = {
+  daily: { includes: {}, actions: "", custom: "" },
+  weekly: { includes: {}, custom: "" },
+  monthly: { includes: {}, custom: "" },
+  emails: []
+};
+
+function loadSettings() {
+  try {
+    var saved = localStorage.getItem("summary_settings");
+    if (saved) settings = JSON.parse(saved);
+  } catch(e) {}
+  
+  // Set checkboxes
+  var dailyChecks = ["d_newDeals","d_wonDeals","d_stuckDeals","d_calls","d_missedCalls","d_voicemail","d_highValue","d_commitments","d_inventory","d_ads"];
+  dailyChecks.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el && settings.daily && settings.daily.includes && settings.daily.includes[id] !== undefined) el.checked = settings.daily.includes[id];
+  });
+  if (settings.daily && settings.daily.actions) document.getElementById("d_actions").value = settings.daily.actions;
+  if (settings.daily && settings.daily.custom) document.getElementById("d_custom").value = settings.daily.custom;
+
+  var weeklyChecks = ["w_summary","w_comparison","w_agents","w_calls","w_stuck","w_inventory","w_commitments","w_ads"];
+  weeklyChecks.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el && settings.weekly && settings.weekly.includes && settings.weekly.includes[id] !== undefined) el.checked = settings.weekly.includes[id];
+  });
+  if (settings.weekly && settings.weekly.custom) document.getElementById("w_custom").value = settings.weekly.custom;
+
+  var monthlyChecks = ["m_revenue","m_comparison","m_deals","m_agents","m_products","m_calls","m_ads","m_commitments"];
+  monthlyChecks.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el && settings.monthly && settings.monthly.includes && settings.monthly.includes[id] !== undefined) el.checked = settings.monthly.includes[id];
+  });
+  if (settings.monthly && settings.monthly.custom) document.getElementById("m_custom").value = settings.monthly.custom;
+
+  renderEmails();
+}
+
+function saveSettings() {
+  // Collect daily
+  var dailyChecks = ["d_newDeals","d_wonDeals","d_stuckDeals","d_calls","d_missedCalls","d_voicemail","d_highValue","d_commitments","d_inventory","d_ads"];
+  var di = {};
+  dailyChecks.forEach(function(id) { var el = document.getElementById(id); if (el) di[id] = el.checked; });
+  settings.daily = { includes: di, actions: document.getElementById("d_actions").value, custom: document.getElementById("d_custom").value };
+
+  // Collect weekly
+  var weeklyChecks = ["w_summary","w_comparison","w_agents","w_calls","w_stuck","w_inventory","w_commitments","w_ads"];
+  var wi = {};
+  weeklyChecks.forEach(function(id) { var el = document.getElementById(id); if (el) wi[id] = el.checked; });
+  settings.weekly = { includes: wi, custom: document.getElementById("w_custom").value };
+
+  // Collect monthly
+  var monthlyChecks = ["m_revenue","m_comparison","m_deals","m_agents","m_products","m_calls","m_ads","m_commitments"];
+  var mi = {};
+  monthlyChecks.forEach(function(id) { var el = document.getElementById(id); if (el) mi[id] = el.checked; });
+  settings.monthly = { includes: mi, custom: document.getElementById("m_custom").value };
+
+  localStorage.setItem("summary_settings", JSON.stringify(settings));
+  showMsg("✓ ההגדרות נשמרו בהצלחה");
+}
+
+function addEmail() {
+  var email = document.getElementById("newEmail").value.trim();
+  if (!email || !email.includes("@")) { alert("הכנס כתובת מייל תקינה"); return; }
+  var daily = document.getElementById("newDaily").checked;
+  var weekly = document.getElementById("newWeekly").checked;
+  var monthly = document.getElementById("newMonthly").checked;
+  if (!daily && !weekly && !monthly) { alert("בחר לפחות סוג סיכום אחד"); return; }
+  
+  // Check duplicate
+  for (var i = 0; i < settings.emails.length; i++) {
+    if (settings.emails[i].email === email) { alert("המייל כבר קיים"); return; }
+  }
+  
+  settings.emails.push({ email: email, daily: daily, weekly: weekly, monthly: monthly });
+  localStorage.setItem("summary_settings", JSON.stringify(settings));
+  document.getElementById("newEmail").value = "";
+  renderEmails();
+  showMsg("✓ " + email + " נוסף");
+}
+
+function removeEmail(index) {
+  settings.emails.splice(index, 1);
+  localStorage.setItem("summary_settings", JSON.stringify(settings));
+  renderEmails();
+}
+
+function toggleEmailType(index, type) {
+  settings.emails[index][type] = !settings.emails[index][type];
+  localStorage.setItem("summary_settings", JSON.stringify(settings));
+  renderEmails();
+}
+
+function renderEmails() {
+  var container = document.getElementById("emailList");
+  if (!settings.emails || !settings.emails.length) {
+    container.innerHTML = '<div style="text-align:center;color:#7A9BBF;padding:1.5rem;font-size:13px">אין מיילים — הוסף את הראשון</div>';
+    return;
+  }
+  var html = '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="text-align:right;padding:6px 8px;color:#7A9BBF;border-bottom:1px solid rgba(255,255,255,.07)">מייל</th><th style="text-align:center;padding:6px 8px;color:#7A9BBF;border-bottom:1px solid rgba(255,255,255,.07)">יומי</th><th style="text-align:center;padding:6px 8px;color:#7A9BBF;border-bottom:1px solid rgba(255,255,255,.07)">שבועי</th><th style="text-align:center;padding:6px 8px;color:#7A9BBF;border-bottom:1px solid rgba(255,255,255,.07)">חודשי</th><th></th></tr></thead><tbody>';
+  
+  for (var i = 0; i < settings.emails.length; i++) {
+    var e = settings.emails[i];
+    html += '<tr style="border-bottom:1px solid rgba(255,255,255,.05)">';
+    html += '<td style="padding:8px;color:#F0F4F8;font-weight:500">' + e.email + '</td>';
+    html += '<td style="text-align:center;padding:8px"><input type="checkbox" ' + (e.daily ? 'checked' : '') + ' onchange="toggleEmailType(' + i + ',\'daily\')" style="accent-color:#1DB8A0;width:16px;height:16px;cursor:pointer"></td>';
+    html += '<td style="text-align:center;padding:8px"><input type="checkbox" ' + (e.weekly ? 'checked' : '') + ' onchange="toggleEmailType(' + i + ',\'weekly\')" style="accent-color:#F0B429;width:16px;height:16px;cursor:pointer"></td>';
+    html += '<td style="text-align:center;padding:8px"><input type="checkbox" ' + (e.monthly ? 'checked' : '') + ' onchange="toggleEmailType(' + i + ',\'monthly\')" style="accent-color:#7B68EE;width:16px;height:16px;cursor:pointer"></td>';
+    html += '<td style="padding:8px"><button class="btn-del" onclick="removeEmail(' + i + ')">🗑</button></td>';
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function switchTab(tab) {
+  var sections = ["Daily","Weekly","Monthly","Emails"];
+  sections.forEach(function(s) {
+    document.getElementById("section" + s).style.display = "none";
+    document.getElementById("tab" + s).className = "tab-btn";
+  });
+  var capTab = tab.charAt(0).toUpperCase() + tab.slice(1);
+  document.getElementById("section" + capTab).style.display = "block";
+  document.getElementById("tab" + capTab).className = "tab-btn active";
+}
+
+function showMsg(txt) {
+  var el = document.getElementById("savedMsg"); el.textContent = txt;
+  setTimeout(function() { el.textContent = ""; }, 3000);
+}
+
+loadSettings();
+</script>
+</body>
+</html>
