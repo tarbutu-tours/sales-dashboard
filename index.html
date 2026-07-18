@@ -1170,36 +1170,35 @@ function AircallTabInner({allCalls}) {
   const {fromStr,toStr,label} = calcRange(days);
   const calls = filterCalls(allCalls, fromStr, toStr);
 
-  // Debug: show first 3 call timestamps
-  const debugInfo = allCalls.slice(0,3).map(c=>{
-    const raw = c.started_at;
-    const ts = new Date(raw*1000);
-    const local = ts.getFullYear()+"-"+String(ts.getMonth()+1).padStart(2,"0")+"-"+String(ts.getDate()).padStart(2,"0");
-    return "raw="+raw+" date="+local;
-  }).join(" | ");
-  const ib = calls.filter(c=>c.direction==="inbound");
-  const ob = calls.filter(c=>c.direction==="outbound");
-  const ms = calls.filter(c=>c.missed===true||c.status==="missed"||(c.direction==="inbound"&&c.answered===false)||(c.direction==="inbound"&&!c.duration));
-  const ans = calls.filter(c=>c.answered===true||(c.duration>0&&c.status!=="missed"));
+  // מספר מוקד הודעות — שיחות שהועברו לשם לא נחשבות כנענו
+  const VM_NUM = "36555139";
+  const isVoicemail = c => {
+    const num = String(c.raw_digits||c.from||c.number||"").replace(/[\s\-\+]/g,"");
+    return num.includes(VM_NUM);
+  };
+  const voicemailCalls = calls.filter(isVoicemail);
+  const realCalls = calls.filter(c => !isVoicemail(c));
+
+  const ib = realCalls.filter(c=>c.direction==="inbound");
+  const ob = realCalls.filter(c=>c.direction==="outbound");
+  const ms = realCalls.filter(c=>c.missed===true||c.status==="missed"||(c.direction==="inbound"&&c.answered===false)||(c.direction==="inbound"&&!c.duration));
+  const ans = realCalls.filter(c=>c.answered===true||(c.duration>0&&c.status!=="missed"));
   const dur = ans.length?Math.round(ans.reduce((s,c)=>s+(c.duration||0),0)/ans.length):0;
-  const rate = calls.length?Math.round((calls.length-ms.length)/calls.length*100):0;
+  const rate = realCalls.length?Math.round((realCalls.length-ms.length)/realCalls.length*100):0;
 
   const agentStats={};
-  calls.forEach(c=>{const name=c.user?.name||c.user?.email||"לא ידוע";if(!agentStats[name])agentStats[name]={name,total:0,inbound:0,outbound:0,missed:0,duration:0,answered:0};agentStats[name].total++;if(c.direction==="inbound")agentStats[name].inbound++;if(c.direction==="outbound")agentStats[name].outbound++;const isMissed=c.missed===true||c.status==="missed"||(c.direction==="inbound"&&c.answered===false)||(c.direction==="inbound"&&!c.duration);if(isMissed)agentStats[name].missed++;else{agentStats[name].answered++;agentStats[name].duration+=(c.duration||0);}});
+  realCalls.forEach(c=>{const name=(c.user&&c.user.name)||"לא ידוע";if(!agentStats[name])agentStats[name]={name,total:0,inbound:0,outbound:0,missed:0,duration:0,answered:0};agentStats[name].total++;if(c.direction==="inbound")agentStats[name].inbound++;if(c.direction==="outbound")agentStats[name].outbound++;const isMissed=c.missed===true||c.status==="missed"||(c.direction==="inbound"&&c.answered===false)||(c.direction==="inbound"&&!c.duration);if(isMissed)agentStats[name].missed++;else{agentStats[name].answered++;agentStats[name].duration+=(c.duration||0);}});
   const agentArr=Object.values(agentStats).sort((a,b)=>b.total-a.total);
-  const hourStats=Array(24).fill(0);calls.forEach(c=>{const h=new Date((c.started_at||c.created_at||0)*1000).getHours();hourStats[h]++;});const maxHour=Math.max(...hourStats,1);
+  const hourStats=Array(24).fill(0);realCalls.forEach(c=>{const h=new Date((c.started_at||c.created_at||0)*1000).getHours();hourStats[h]++;});const maxHour=Math.max(...hourStats,1);
   const missedCalls=ms;
 
   return <div>
     <div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}><DateFilter value={days} onChange={setDays}/></div>
-    <div style={{fontSize:10,color:T.gold,marginBottom:8,padding:"6px 10px",background:"rgba(240,180,41,.1)",borderRadius:6}}>
-      DEBUG: total={allCalls.length} filtered={calls.length} from={fromStr} to={toStr} | {debugInfo}
-    </div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
-      <Kpi label="📞 סה״כ שיחות" value={calls.length} delta={label}/><Kpi label="📲 נכנסות" value={ib.length} color={T.teal} dc={T.teal}/><Kpi label="📤 יוצאות" value={ob.length} color={T.gold} dc={T.gold}/><Kpi label="🔕 לא נענו" value={ms.length} delta={"מענה "+rate+"%"} color={T.red} dc={T.red}/>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10,marginBottom:10}}>
+      <Kpi label="📞 סה״כ שיחות" value={realCalls.length} delta={label}/><Kpi label="📲 נכנסות" value={ib.length} color={T.teal} dc={T.teal}/><Kpi label="📤 יוצאות" value={ob.length} color={T.gold} dc={T.gold}/><Kpi label="🔕 לא נענו" value={ms.length} delta={"מענה "+rate+"%"} color={T.red} dc={T.red}/><Kpi label="📱 מוקד הודעות" value={voicemailCalls.length} delta="הועבר" color="#7B68EE"/>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:10}}>
-      <Kpi label="⏱️ משך ממוצע" value={mmss(dur)} delta="שיחות שנענו"/><Kpi label="✅ שיחות שנענו" value={calls.length-ms.length} color={T.teal}/><Kpi label="📊 שיעור מענה" value={rate+"%"} color={rate>=80?T.teal:T.gold} dc={rate>=80?T.teal:T.gold}/>
+      <Kpi label="⏱️ משך ממוצע" value={mmss(dur)} delta="שיחות שנענו"/><Kpi label="✅ שיחות שנענו" value={realCalls.length-ms.length} color={T.teal}/><Kpi label="📊 שיעור מענה" value={rate+"%"} color={rate>=80?T.teal:T.gold} dc={rate>=80?T.teal:T.gold}/>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
       <div style={card}><div style={ct}>ביצועים לפי נציג</div>{agentArr.length===0?<div style={{color:T.muted,fontSize:12}}>אין נתונים</div>:<table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr>{["נציג","סה״כ","נכנסות","יוצאות","לא נענו","מענה %"].map(h=><th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"4px 6px 8px",borderBottom:"1px solid "+T.border,fontSize:10}}>{h}</th>)}</tr></thead><tbody>{agentArr.map((a,i)=><tr key={a.name} style={{borderBottom:"1px solid "+T.border}}><td style={{padding:"7px 6px",fontWeight:600,fontSize:11}}>{a.name.split(" ")[0]||a.name}</td><td style={{padding:"7px 6px",color:T.muted}}>{a.total}</td><td style={{padding:"7px 6px",color:T.teal}}>{a.inbound}</td><td style={{padding:"7px 6px",color:T.gold}}>{a.outbound}</td><td style={{padding:"7px 6px",color:a.missed>0?T.red:T.muted}}>{a.missed}</td><td style={{padding:"7px 6px"}}><span style={{fontSize:11,fontWeight:600,color:a.total>0&&(a.total-a.missed)/a.total>=0.8?T.teal:T.gold}}>{a.total>0?Math.round((a.total-a.missed)/a.total*100):0}%</span></td></tr>)}</tbody></table>}</div>
