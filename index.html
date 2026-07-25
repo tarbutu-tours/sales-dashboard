@@ -835,9 +835,14 @@ function DailySummaryTab({open, won, newDeals, recW, calls, acOK, ib, ob, ms, sm
         missedNumbers: missedToReturn.map(c=>c.raw_digits||c.from||c.number||"").filter(Boolean),
       };
 
-      const resp = await fetch(WORKER+"?url="+encodeURIComponent("https://api.anthropic.com/v1/messages"), {
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
         method:"POST",
-        headers:{"Content-Type":"application/json"},
+        headers:{
+          "Content-Type":"application/json",
+          "x-api-key":"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",
+          "anthropic-version":"2023-06-01",
+          "anthropic-dangerous-direct-browser-access":"true"
+        },
         body:JSON.stringify({
           model:"claude-sonnet-4-6",
           max_tokens:1000,
