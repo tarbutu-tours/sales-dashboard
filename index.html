@@ -251,11 +251,14 @@ async function fetchGoogleAdsData(fromStr, toStr) {
     
     for (let i = 1; i < campLines.length; i++) {
       const row = campLines[i];
-      if (row.length >= 4 && row[1]) {
+      if (row.length >= 4 && row[0]) {
         campaigns.push({
-          name: row[1],
-          cost: parseFloat(row[3]) || 0,
-          conv: parseFloat(row[4]) || 0
+          name: row[0],
+          cost: parseFloat(row[1]) || 0,
+          conv: parseFloat(row[2]) || 0,
+          clicks: parseFloat(row[3]) || 0,
+          budget: parseFloat(row[4]) || 0,
+          remaining: parseFloat(row[5]) || 0
         });
       }
     }
@@ -466,7 +469,7 @@ function AdsTab({won, fromStr, toStr, label}) {
         <div style={ct}>פירוט קמפיינים</div>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
           <thead><tr>
-            {["קמפיין","הוצאות","לידים","CPL","% מסה״כ"].map(h=>
+            {["קמפיין","הוצאות","לידים","CPL","תקציב יומי","נשאר היום","% מסה״כ"].map(h=>
               <th key={h} style={{color:T.muted,fontWeight:500,textAlign:"right",padding:"4px 8px 8px",borderBottom:"1px solid "+T.border,fontSize:10}}>{h}</th>
             )}
           </tr></thead>
@@ -474,11 +477,22 @@ function AdsTab({won, fromStr, toStr, label}) {
             const campCpl = c.conv > 0 ? c.cost / c.conv : 0;
             const pct = report.totalCost > 0 ? Math.round(c.cost / report.totalCost * 100) : 0;
             const campCplColor = campCpl > 0 && cpl > 0 ? (campCpl <= cpl ? T.teal : T.red) : T.muted;
+            const budgetPct = c.budget > 0 ? Math.round((c.budget - c.remaining) / c.budget * 100) : 0;
+            const remainColor = c.remaining === 0 ? T.red : c.budget > 0 && c.remaining / c.budget < 0.2 ? T.gold : T.teal;
             return <tr key={i} style={{borderBottom:"1px solid "+T.border}}>
               <td style={{padding:"7px 8px",fontSize:11,color:"#F0F4F8"}}>{c.name}</td>
               <td style={{padding:"7px 8px",color:T.gold,fontWeight:600}}>{fmtILS(c.cost)}</td>
               <td style={{padding:"7px 8px",color:T.teal}}>{Math.round(c.conv)}</td>
               <td style={{padding:"7px 8px",fontWeight:600,color:campCplColor}}>{campCpl>0?fmtILS(campCpl):"–"}</td>
+              <td style={{padding:"7px 8px",color:T.muted}}>{c.budget>0?fmtILS(c.budget):"–"}</td>
+              <td style={{padding:"7px 8px"}}>
+                {c.budget > 0 ? <div>
+                  <div style={{fontWeight:600,color:remainColor,fontSize:11}}>{fmtILS(c.remaining)}</div>
+                  <div style={{height:3,background:"rgba(255,255,255,.06)",borderRadius:2,marginTop:3,overflow:"hidden",width:60}}>
+                    <div style={{width:budgetPct+"%",height:3,background:budgetPct>=90?T.red:budgetPct>=70?T.gold:T.teal,borderRadius:2}}/>
+                  </div>
+                </div> : <span style={{color:T.muted}}>–</span>}
+              </td>
               <td style={{padding:"7px 8px"}}>
                 <div style={{display:"flex",alignItems:"center",gap:6}}>
                   <div style={{flex:1,height:5,background:"rgba(255,255,255,.06)",borderRadius:3,overflow:"hidden",minWidth:40}}>
