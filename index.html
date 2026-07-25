@@ -835,7 +835,8 @@ function DailySummaryTab({open, won, newDeals, recW, calls, acOK, ib, ob, ms, sm
         missedNumbers: missedToReturn.map(c=>c.raw_digits||c.from||c.number||"").filter(Boolean),
       };
 
-      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
+      const resp = await fetch(ANTHROPIC_URL, {
         method:"POST",
         headers:{
           "Content-Type":"application/json",
