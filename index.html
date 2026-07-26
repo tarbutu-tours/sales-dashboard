@@ -819,20 +819,42 @@ function DailySummaryTab({open, won, newDeals, recW, calls, acOK, ib, ob, ms, sm
   async function generateAISummary() {
     setAiLoading(true); setAiError("");
     try {
+      // נתוני עסקאות תקועות עם שמות ונציגים
+      const stuckDetails = stuck.sort((a,b)=>daysIn(b)-daysIn(a)).slice(0,8).map(d=>({
+        title: d.title||"", agent: um[d.user_id?.id||d.user_id]||"", days: daysIn(d), stage: sm[d.stage_id]||"", value: Number(d.value)||0
+      }));
+
+      // מספרים שלא נענו
+      const missedNumbers = yMissed.filter(c=>c.raw_digits||c.from||c.number).slice(0,8).map(c=>{
+        const ts = new Date((c.started_at||0)*1000);
+        return (c.raw_digits||c.from||c.number||"") + " (" + ts.toLocaleTimeString("he-IL",{hour:"2-digit",minute:"2-digit"}) + ")";
+      });
+
+      // עסקאות שנסגרו אתמול עם שמות
+      const wonDetails = yWon.slice(0,5).map(d=>({title:d.title||"",value:Number(d.value)||0,agent:um[d.user_id?.id||d.user_id]||""}));
+
+      // ביצועי נציגים — מי יש לו הכי הרבה תקועות
+      const agentStuck = {};
+      stuck.forEach(d=>{ const a=um[d.user_id?.id||d.user_id]||"לא ידוע"; agentStuck[a]=(agentStuck[a]||0)+1; });
+      const agentStuckStr = Object.entries(agentStuck).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([n,c])=>n+": "+c).join(", ");
+
       const context = {
         yesterday: yStr,
         newDeals: yDeals.length,
         wonDeals: yWon.length,
         wonValue: yWonVal,
+        wonDetails,
         totalCalls: yCalls.length,
         inbound: yInbound.length,
         outbound: yOutbound.length,
         missed: yMissed.length,
+        missedNumbers,
         stuckDeals: stuck.length,
+        stuckDetails,
+        agentStuck: agentStuckStr,
         waitingDeals: waiting.length,
         totalOpen: (open||[]).length,
-        highValueDeals: highValue.map(d=>({title:d.title,value:d.value,days:daysIn(d),stage:sm[d.stage_id]||""})),
-        missedNumbers: missedToReturn.map(c=>c.raw_digits||c.from||c.number||"").filter(Boolean),
+        highValueDeals: highValue.map(d=>({title:d.title,value:d.value,days:daysIn(d),agent:um[d.user_id?.id||d.user_id]||"",stage:sm[d.stage_id]||""})),
       };
 
       const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -846,26 +868,31 @@ function DailySummaryTab({open, won, newDeals, recW, calls, acOK, ib, ob, ms, sm
         },
         body:JSON.stringify({
           model:"claude-sonnet-4-6",
-          max_tokens:1000,
+          max_tokens:1200,
           messages:[{role:"user",content:`אתה עוזר עסקי של חברת תיירות שמוכרת קרוזים וטיולים מאורגנים. כתוב סיכום יומי קצר ומעשי בעברית.
 
 נתוני אתמול (${yStr}):
 - עסקאות חדשות: ${context.newDeals}
-- עסקאות שנסגרו: ${context.wonDeals} (ערך: $${context.wonValue})
+- עסקאות שנסגרו: ${context.wonDeals} (ערך: ₪${Math.round(context.wonValue).toLocaleString()})
+${context.wonDetails.length>0?"- פירוט סגירות: "+context.wonDetails.map(d=>d.title+" - "+d.agent+" (₪"+Math.round(d.value).toLocaleString()+")").join(", "):""}
 - שיחות: ${context.totalCalls} (נכנסות: ${context.inbound}, יוצאות: ${context.outbound}, לא נענו: ${context.missed})
+${context.missedNumbers.length>0?"- מספרים שלא נענו לחזור אליהם: "+context.missedNumbers.join(", "):""}
 
 מצב נוכחי:
 - עסקאות פתוחות: ${context.totalOpen}
 - תקועות מעל 14 יום: ${context.stuckDeals}
+${context.stuckDetails.length>0?"- פירוט תקועות: "+context.stuckDetails.map(d=>d.title+" ("+d.agent+", "+d.days+" יום, "+d.stage+")").join(" | "):""}
+${context.agentStuck?"- תקועות לפי נציג: "+context.agentStuck:""}
 - ממתינות 7-14 יום: ${context.waitingDeals}
-- עסקאות בערך גבוה: ${JSON.stringify(context.highValueDeals)}
+- עסקאות בערך גבוה: ${context.highValueDeals.map(d=>d.title+" - "+d.agent+" (₪"+Math.round(d.value).toLocaleString()+", "+d.days+" ימים, "+d.stage+")").join(" | ")}
 
 כתוב:
-1. סיכום קצר של אתמול (3-4 משפטים)
-2. 3-5 משימות מומלצות להיום (ממוקדות, פרקטיות)
-3. אם יש שיחות שלא נענו, ציין שצריך לחזור אליהן
+1. סיכום קצר של אתמול (2-3 משפטים)
+2. 3-5 משימות ספציפיות להיום — עם שמות לקוחות ונציגים! לא כללי.
+3. אם יש שיחות שלא נענו — ציין את המספרים לחזור אליהם
+4. אם נציג ספציפי יש לו הרבה תקועות — ציין אותו בשם
 
-כתוב בנקודות, קצר ולעניין. אל תשתמש בכותרות גדולות.`}]
+כתוב בנקודות, קצר וממוקד. שמות ספציפיים > מספרים כלליים.`}]
         })
       });
       const data = await resp.json();
